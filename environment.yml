@@ -43,6 +43,8 @@ dependencies:
   - torchaudio
   - pytorch-cuda=12.4
   - pip
+
+  # Pip-installed packages
   - pip:
       - torchsummary
       - pylatexenc
@@ -56,6 +58,5 @@ dependencies:
       - pillow
       - watchlogs
       - wget
-      - mn
       - pyod
       - combo
