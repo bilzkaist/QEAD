@@ -60,3 +60,5 @@ dependencies:
       - wget
       - pyod
       - combo
+      - nids-datasets
+      - git+https://github.com/haowen-xu/tfsnippet
