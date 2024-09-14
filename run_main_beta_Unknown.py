@@ -243,19 +243,45 @@ def classical_methods(X_train, y_train, X_test, y_test):
     }
 
     results = {}
+
+    # Check how many unique classes are in the training data
+    unique_classes = np.unique(y_train)
+
+    if len(unique_classes) == 1:
+        print(f"Warning: Only one class ({unique_classes[0]}) present in the training data. Skipping models that require two classes.")
+
+        # Use only models that can handle one-class data
+        one_class_models = ['One-Class SVM', 'Isolation Forest', 'Local Outlier Factor']
+        models = {name: model for name, model in models.items() if name in one_class_models}
+
     for name, model in models.items():
-        model.fit(X_train, y_train)
-        
-        # For models that support probability prediction
-        if hasattr(model, "predict_proba"):
-            y_pred_proba = model.predict_proba(X_test)[:, 1]  # Get probability for class 1
-            y_pred = model.predict(X_test)  # Hard predictions for calculating non-AUC metrics
-            results[name] = (y_pred, y_pred_proba)
-        else:
-            y_pred = model.predict(X_test)
-            results[name] = (y_pred, None)  # No probability predictions available
+        try:
+            model.fit(X_train, y_train)
+            
+            # Check if the model has the `predict_proba` attribute
+            if hasattr(model, "predict_proba"):
+                y_pred_proba = model.predict_proba(X_test)
+                
+                # Ensure there are two classes in the prediction
+                if y_pred_proba.shape[1] == 2:
+                    y_pred_proba_class_1 = y_pred_proba[:, 1]  # Get probability for class 1
+                else:
+                    # If only one class is predicted, set probabilities for class 1 to zero
+                    y_pred_proba_class_1 = np.zeros(len(X_test))
+                    
+                y_pred = model.predict(X_test)  # Hard predictions for calculating non-AUC metrics
+                results[name] = (y_pred, y_pred_proba_class_1)
+            else:
+                # If the model doesn't support `predict_proba`, we just use hard predictions
+                y_pred = model.predict(X_test)
+                results[name] = (y_pred, None)  # No probability predictions available
+
+        except ValueError as ve:
+            print(f"Skipping model {name} due to error: {ve}")
+            continue
 
     return results
+
 
 # Calculate NAB score using TP Rate and TN Rate
 def calculate_nab_score(tp_rate, tn_rate, weights):
