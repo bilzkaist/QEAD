@@ -48,7 +48,7 @@ def preprocess_data(data, window_size=20):
         y_true = data['label'].values[window_size:]  # If the 'label' column exists, use it
     else:
         # If there's no label column, generate synthetic labels (e.g., all 0s for no anomaly)
-        print("No 'label' column found. Generating synthetic labels (all non-anomalies)...")
+        # print("No 'label' column found. Generating synthetic labels (all non-anomalies)...")
         y_true = np.zeros(len(data) - window_size)  # Assuming no anomalies
 
     X = np.array([data[data_column].values[i:i + window_size] for i in range(len(data) - window_size)])
