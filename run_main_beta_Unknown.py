@@ -24,6 +24,7 @@ warnings.filterwarnings("ignore")
 
 # Set dataset path for NAB
 dataset_path = "/home/bilz/datasets/qead/NAB/data/"
+result_path = "/home/bilz/results/"  # Path to save the results
 
 # Use a non-interactive backend to avoid "Wayland" issues
 import matplotlib
@@ -48,7 +49,6 @@ def preprocess_data(data, window_size=20):
         y_true = data['label'].values[window_size:]  # If the 'label' column exists, use it
     else:
         # If there's no label column, generate synthetic labels (e.g., all 0s for no anomaly)
-        # print("No 'label' column found. Generating synthetic labels (all non-anomalies)...")
         y_true = np.zeros(len(data) - window_size)  # Assuming no anomalies
 
     X = np.array([data[data_column].values[i:i + window_size] for i in range(len(data) - window_size)])
@@ -153,8 +153,6 @@ def create_noise_models():
 
 # Quantum and classical comparison function with noise support
 def run_comparison_with_noise(datasets, window_size=20):
-    results = {}
-
     # Create the noise models
     noise_model = create_noise_models()
 
@@ -191,12 +189,14 @@ def run_comparison_with_noise(datasets, window_size=20):
                 classical_accuracies[model_name]['ROC AUC'] = "N/A"
                 classical_accuracies[model_name]['PR AUC'] = "N/A"
 
-        results[name] = {
+        results = {
             'quantum_metrics': quantum_metrics,
             'classical_accuracies': classical_accuracies
         }
 
-    return results
+        # Print and save comparison table for the current dataset
+        print_and_save_comparison_table(name, results)
+
 
 # Calculate metrics function
 def calculate_metrics(y_true, y_pred, y_pred_proba=None):
@@ -276,12 +276,12 @@ def classical_methods(X_train, y_train, X_test, y_test):
                 y_pred = model.predict(X_test)
                 results[name] = (y_pred, None)  # No probability predictions available
 
+
         except ValueError as ve:
             print(f"Skipping model {name} due to error: {ve}")
             continue
 
     return results
-
 
 # Calculate NAB score using TP Rate and TN Rate
 def calculate_nab_score(tp_rate, tn_rate, weights):
@@ -299,59 +299,64 @@ def calculate_nab_score(tp_rate, tn_rate, weights):
     # Ensure the NAB score is between 0 and 100
     return max(0, min(nab_score, 100))
 
-# Print comparison table with NAB Score for all methods
-def print_comparison_table(results):
+# Print and save comparison table with NAB Score for a single dataset
+def print_and_save_comparison_table(dataset_name, results):
     nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
 
-    for dataset_name, res in results.items():
-        print(f"\nComparison Table for Dataset: {dataset_name}")
-        print(f"{'Method':<25} {'MCC':<8} {'F1':<8} {'Accuracy':<10} {'TP Rate':<10} {'TN Rate':<10} {'PR AUC':<8} {'ROC AUC':<8} {'NAB Score':<10}")
+    output = []
+    output.append(f"\nComparison Table for Dataset: {dataset_name}")
+    output.append(f"{'Method':<25} {'MCC':<8} {'F1':<8} {'Accuracy':<10} {'TP Rate':<10} {'TN Rate':<10} {'PR AUC':<8} {'ROC AUC':<8} {'NAB Score':<10}")
+    
+    # Quantum method results
+    quantum_metrics = results['quantum_metrics']
+    pr_auc_str = quantum_metrics['PR AUC'] if isinstance(quantum_metrics['PR AUC'], str) else f"{quantum_metrics['PR AUC']:.3f}"
+    roc_auc_str = quantum_metrics['ROC AUC'] if isinstance(quantum_metrics['ROC AUC'], str) else f"{quantum_metrics['ROC AUC']:.3f}"
+    
+    # Calculate NAB Score for Quantum Method using TP Rate and TN Rate
+    nab_score_quantum = calculate_nab_score(quantum_metrics['TP Rate'], quantum_metrics['TN Rate'], nab_weights)
+    nab_score_str = f"{nab_score_quantum:.3f}"
+    
+    output.append(f"{'Quantum Method':<25} "
+          f"{quantum_metrics['MCC']:<8.3f} "
+          f"{quantum_metrics['F1']:<8.3f} "
+          f"{quantum_metrics['Accuracy']:<10.3f} "
+          f"{quantum_metrics['TP Rate']:<10.3f} "
+          f"{quantum_metrics['TN Rate']:<10.3f} "
+          f"{pr_auc_str:<8} "
+          f"{roc_auc_str:<8} "
+          f"{nab_score_str:<10}")
+
+    # Classical methods results
+    for method, metrics in results['classical_accuracies'].items():
+        pr_auc_str = metrics['PR AUC'] if isinstance(metrics['PR AUC'], str) else f"{metrics['PR AUC']:.3f}"
+        roc_auc_str = metrics['ROC AUC'] if isinstance(metrics['ROC AUC'], str) else f"{metrics['ROC AUC']:.3f}"
         
-        # Quantum method results
-        quantum_metrics = res['quantum_metrics']
-        pr_auc_str = quantum_metrics['PR AUC'] if isinstance(quantum_metrics['PR AUC'], str) else f"{quantum_metrics['PR AUC']:.3f}"
-        roc_auc_str = quantum_metrics['ROC AUC'] if isinstance(quantum_metrics['ROC AUC'], str) else f"{quantum_metrics['ROC AUC']:.3f}"
+        # Calculate NAB Score for each classical method using TP Rate and TN Rate
+        nab_score_classical = calculate_nab_score(metrics['TP Rate'], metrics['TN Rate'], nab_weights)
+        nab_score_str = f"{nab_score_classical:.3f}"
         
-        # Calculate NAB Score for Quantum Method using TP Rate and TN Rate
-        nab_score_quantum = calculate_nab_score(quantum_metrics['TP Rate'], quantum_metrics['TN Rate'], nab_weights)
-        nab_score_str = f"{nab_score_quantum:.3f}"
-        
-        print(f"{'Quantum Method':<25} "
-              f"{quantum_metrics['MCC']:<8.3f} "
-              f"{quantum_metrics['F1']:<8.3f} "
-              f"{quantum_metrics['Accuracy']:<10.3f} "
-              f"{quantum_metrics['TP Rate']:<10.3f} "
-              f"{quantum_metrics['TN Rate']:<10.3f} "
+        output.append(f"{method:<25} "
+              f"{metrics['MCC']:<8.3f} "
+              f"{metrics['F1']:<8.3f} "
+              f"{metrics['Accuracy']:<10.3f} "
+              f"{metrics['TP Rate']:<10.3f} "
+              f"{metrics['TN Rate']:<10.3f} "
               f"{pr_auc_str:<8} "
               f"{roc_auc_str:<8} "
               f"{nab_score_str:<10}")
 
-        # Classical methods results
-        for method, metrics in res['classical_accuracies'].items():
-            pr_auc_str = metrics['PR AUC'] if isinstance(metrics['PR AUC'], str) else f"{metrics['PR AUC']:.3f}"
-            roc_auc_str = metrics['ROC AUC'] if isinstance(metrics['ROC AUC'], str) else f"{metrics['ROC AUC']:.3f}"
-            
-            # Calculate NAB Score for each classical method using TP Rate and TN Rate
-            nab_score_classical = calculate_nab_score(metrics['TP Rate'], metrics['TN Rate'], nab_weights)
-            nab_score_str = f"{nab_score_classical:.3f}"
-            
-            print(f"{method:<25} "
-                  f"{metrics['MCC']:<8.3f} "
-                  f"{metrics['F1']:<8.3f} "
-                  f"{metrics['Accuracy']:<10.3f} "
-                  f"{metrics['TP Rate']:<10.3f} "
-                  f"{metrics['TN Rate']:<10.3f} "
-                  f"{pr_auc_str:<8} "
-                  f"{roc_auc_str:<8} "
-                  f"{nab_score_str:<10}")
+    # Print to console
+    print("\n".join(output))
 
+    # Save to file
+    with open(result_path + 'results_NAB_All.txt', 'a') as f:
+        f.write("\n".join(output))
+        f.write("\n\n")  # Add some spacing between datasets
 
 # Main script execution
 def main():
     datasets = load_datasets()
-    #results = run_comparison(datasets, window_size=4)
     results = run_comparison_with_noise(datasets, window_size=4)
-    print_comparison_table(results)
 
 if __name__ == "__main__":
     main()
