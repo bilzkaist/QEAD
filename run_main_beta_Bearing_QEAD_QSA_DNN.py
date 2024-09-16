@@ -234,6 +234,19 @@ def dnn_anomaly_detection(X_train, y_train, X_test, y_test, device, batch_size=1
     
     return calculate_metrics(y_true, y_pred)
 
+# NAB Score Calculation Function
+def calculate_nab_score(tp_rate, tn_rate, weights):
+    fp_rate = 1 - tn_rate
+    fn_rate = 1 - tp_rate
+    
+    nab_score = (
+        weights["TP"] * tp_rate
+        - weights["FP"] * fp_rate
+        - weights["FN"] * fn_rate
+    )
+    
+    return max(0, min(nab_score, 100))
+
 # Calculate metrics
 def calculate_metrics(y_true, y_pred, y_pred_proba=None):
     cm = confusion_matrix(y_true, y_pred, labels=np.unique(y_true))
@@ -253,8 +266,9 @@ def calculate_metrics(y_true, y_pred, y_pred_proba=None):
         "TN Rate": tn_rate
     }
 
-# Define run_comparison function
+# Define run_comparison function with NAB Score calculation
 def run_comparison(datasets, window_size=20, device='cpu'):
+    nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
     results = {}
 
     for name, data in datasets.items():
@@ -274,6 +288,7 @@ def run_comparison(datasets, window_size=20, device='cpu'):
         smart_threshold_qead = calculate_smart_threshold(anomaly_scores_qead)
         y_pred_qead = [1 if score > smart_threshold_qead else 0 for score in anomaly_scores_qead]
         qead_metrics = calculate_metrics(y_test[:len(y_pred_qead)], y_pred_qead)
+        nab_score_qead = calculate_nab_score(qead_metrics['TP Rate'], qead_metrics['TN Rate'], nab_weights)
 
         # Quantum Self-Attention (QSA)
         print(f"Running Quantum Self-Attention for dataset {name}...")
@@ -287,30 +302,42 @@ def run_comparison(datasets, window_size=20, device='cpu'):
         smart_threshold_qsa = calculate_smart_threshold(anomaly_scores_qsa)
         y_pred_qsa = [1 if score > smart_threshold_qsa else 0 for score in anomaly_scores_qsa]
         qsa_metrics = calculate_metrics(y_test[:len(y_pred_qsa)], y_pred_qsa)
+        nab_score_qsa = calculate_nab_score(qsa_metrics['TP Rate'], qsa_metrics['TN Rate'], nab_weights)
 
         # DNN-based anomaly detection
         print(f"Running DNN Self-Attention for dataset {name}...")
         dnn_metrics = dnn_anomaly_detection(X_train, y_train, X_test, y_test, device)
+        nab_score_dnn = calculate_nab_score(dnn_metrics['TP Rate'], dnn_metrics['TN Rate'], nab_weights)
 
         results[name] = {
             'qead_metrics': qead_metrics,
             'qsa_metrics': qsa_metrics,
-            'dnn_metrics': dnn_metrics
+            'dnn_metrics': dnn_metrics,
+            'nab_scores': {
+                'QEAD': nab_score_qead,
+                'QSA': nab_score_qsa,
+                'DNN': nab_score_dnn
+            }
         }
 
     return results
 
-# Print comparison table
+# Print comparison table with NAB Score
 def print_comparison_table(results):
     for dataset_name, res in results.items():
         print(f"\nComparison Table for Dataset: {dataset_name}")
         for method, metrics in res.items():
-            print(f"{method:<20} "
-                  f"Accuracy: {metrics['Accuracy']:<8.3f} "
-                  f"MCC: {metrics['MCC']:<8.3f} "
-                  f"F1: {metrics['F1']:<8.3f} "
-                  f"TP Rate: {metrics['TP Rate']:<8.3f} "
-                  f"TN Rate: {metrics['TN Rate']:<8.3f}")
+            if method == 'nab_scores':
+                print(f"\nNAB Scores:")
+                for key, value in metrics.items():
+                    print(f"{key}: {value}")
+            else:
+                print(f"{method:<20} "
+                      f"Accuracy: {metrics['Accuracy']:<8.3f} "
+                      f"MCC: {metrics['MCC']:<8.3f} "
+                      f"F1: {metrics['F1']:<8.3f} "
+                      f"TP Rate: {metrics['TP Rate']:<8.3f} "
+                      f"TN Rate: {metrics['TN Rate']:<8.3f}")
 
 # Main script execution
 def main():
