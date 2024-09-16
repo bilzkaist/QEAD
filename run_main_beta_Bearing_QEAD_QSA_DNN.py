@@ -44,8 +44,8 @@ class BearingDataset(data.Dataset):
         return self.X[index], self.y[index]
 
 # Preprocessing function for Bearing dataset
-def preprocess_data(data, window_size=20):
-    print(f"Preprocessing bearing data with window size {window_size}...")
+def preprocess_data(data, qubit_no=20):
+    print(f"Preprocessing bearing data with qubit no {qubit_no}...")
 
     if data.empty:
         raise ValueError("Dataset is empty.")
@@ -56,8 +56,8 @@ def preprocess_data(data, window_size=20):
     if 'Bearing 1' in data.columns:
         print("Processing bearing data from 'Bearing 1'...")
         data['Bearing 1'] = scaler.fit_transform(data['Bearing 1'].values.reshape(-1, 1))
-        X = np.array([data['Bearing 1'].values[i:i + window_size] for i in range(len(data) - window_size)])
-        y_true = np.array([1 if val > 0.8 else 0 for val in data['Bearing 1'][window_size:]])
+        X = np.array([data['Bearing 1'].values[i:i + qubit_no] for i in range(len(data) - qubit_no)])
+        y_true = np.array([1 if val > 0.8 else 0 for val in data['Bearing 1'][qubit_no:]])
     else:
         raise ValueError("Unknown data format in dataset.")
     
@@ -396,14 +396,14 @@ def classical_methods(X_train, y_train, X_test, y_test):
     return results
 
 # Run comparison between QEAD, QSA, DNN (Self-Attention, CNN, LSTM, GRU, etc.), and Classical models
-def run_comparison(datasets, window_size=20, device='cpu'):
+def run_comparison(datasets, qubit_no=20, device='cpu'):
     nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
     results = {}
     y_test_dict = {}
 
     for name, data in datasets.items():
         print(f"\nProcessing dataset: {name}")
-        X, y_true = preprocess_data(data, window_size)
+        X, y_true = preprocess_data(data, qubit_no)
         X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42)
 
         # Save y_test for later use in the comparison table
@@ -426,7 +426,7 @@ def run_comparison(datasets, window_size=20, device='cpu'):
         # Quantum Self-Attention (QSA)
         print(f"Running Quantum Self-Attention for dataset {name}...")
         anomaly_scores_qsa = []
-        qsa = QuantumSelfAttention(window_size)
+        qsa = QuantumSelfAttention(qubit_no)
         for sample_X in tqdm(X_test, desc="QSA"):
             result = qsa.run(sample_X)
             score = qsa.process_attention_output(result)
@@ -564,7 +564,7 @@ def print_comparison_table(results, y_test_dict):
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     datasets = load_datasets()
-    results, y_test_dict = run_comparison(datasets, window_size=4, device=device)
+    results, y_test_dict = run_comparison(datasets, qubit_no=4, device=device)
     print_comparison_table(results, y_test_dict)
 
 if __name__ == "__main__":
