@@ -11,8 +11,8 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.covariance import EllipticEnvelope
 from sklearn.ensemble import IsolationForest
 from sklearn.svm import OneClassSVM
+from sklearn.model_selection import KFold
 from scipy.optimize import minimize
-from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, depolarizing_error, amplitude_damping_error, phase_damping_error
@@ -85,19 +85,21 @@ def optimize_params(X, initial_params, noise_model=None):
     result = minimize(objective_function, initial_params, args=(X, noise_model), method='COBYLA')
     return result.x
 
-# Quantum Self Attention (QSA) for anomaly detection
+# Quantum Self Attention (QSA) with parameter optimization for anomaly detection
 class QuantumSelfAttention:
     def __init__(self, num_inputs):
         self.num_inputs = num_inputs
         self.qc = QuantumCircuit(self.num_inputs)
+        self.params = np.random.rand(self.num_inputs) * 2 * np.pi  # Initialize parameters for the variational ansatz
 
     def encode_inputs(self, inputs):
         for i, value in enumerate(inputs):
             self.qc.ry(value, i)
 
-    def apply_ansatz(self):
-        for i in range(self.num_inputs):
-            self.qc.rx(np.pi/4, i)
+    def apply_ansatz(self, params):
+        for i, param in enumerate(params):
+            self.qc.rx(param, i)
+            self.qc.rz(param, i)
 
     def measure_attention(self):
         self.qc.measure_all()
@@ -111,15 +113,40 @@ class QuantumSelfAttention:
 
     def run(self, inputs, noise_model=None):
         self.encode_inputs(inputs)
-        self.apply_ansatz()
+        self.apply_ansatz(self.params)  # Apply variational parameters
         self.measure_attention()
         return self.simulate(noise_model=noise_model)
 
-# Quantum Self-Attention anomaly detection
-def quantum_self_attention_anomaly_detection(X, noise_model=None):
+    def objective_function(self, params, X, noise_model=None):
+        self.qc = QuantumCircuit(self.num_inputs)  # Reset circuit
+        self.encode_inputs(X)
+        self.apply_ansatz(params)
+        self.measure_attention()
+        simulator = AerSimulator(noise_model=noise_model)
+        job = simulator.run(self.qc)
+        result = job.result()
+        counts = result.get_counts(self.qc)
+        probability_of_0 = counts.get('0' * self.num_inputs, 0) / sum(counts.values())
+        loss = 1 - probability_of_0
+        return loss
+
+    # Optimize the parameters of the ansatz for anomaly detection
+    def optimize_params(self, X, noise_model=None):
+        initial_params = np.random.rand(self.num_inputs) * 2 * np.pi
+        result = minimize(self.objective_function, initial_params, args=(X, noise_model), method='COBYLA')
+        self.params = result.x  # Update the variational parameters with optimized values
+
+# Quantum Self-Attention anomaly detection with training
+def quantum_self_attention_anomaly_detection(X_train, X_test, noise_model=None):
+    qsa = QuantumSelfAttention(len(X_train[0]))
+
+    # Train QSA using the training data
+    for sample_X in tqdm(X_train, desc="Training Quantum Self-Attention"):
+        qsa.optimize_params(sample_X, noise_model=noise_model)
+
+    # Apply the trained QSA to the test data
     anomaly_scores = []
-    for sample_X in tqdm(X, desc="Quantum Self-Attention Anomaly Detection"):
-        qsa = QuantumSelfAttention(len(sample_X))
+    for sample_X in tqdm(X_test, desc="Testing Quantum Self-Attention"):
         result = qsa.run(sample_X, noise_model)
         score = process_attention_output(result)
         anomaly_scores.append(score)
@@ -192,63 +219,91 @@ def calculate_smart_threshold(scores):
     upper_bound = q75 + 1.5 * iqr
     return upper_bound
 
-# Run comparison with and without noise
-def run_comparison_with_and_without_noise(datasets, qubit_no=20):
+# Run comparison with and without noise using 6-fold cross-validation
+def run_comparison_with_and_without_noise_6fold(datasets, qubit_no=20):
     results = {}
     noise_model = create_noise_models()
 
     for name, data in datasets.items():
         X, y_true = preprocess_data(data, qubit_no)
-        X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42)
 
-        # Quantum Enhanced Anomaly Detection (QEAD) with and without noise
-        anomaly_scores_qead_noise = []
-        anomaly_scores_qead_no_noise = []
-        
-        for sample_X in tqdm(X_test, desc="QEAD with Noise"):
-            initial_params = np.random.rand(len(sample_X)) * 2 * np.pi
-            optimized_params = optimize_params(sample_X, initial_params, noise_model=noise_model)
-            score_with_noise = objective_function(optimized_params, sample_X, noise_model=noise_model)
-            score_without_noise = objective_function(optimized_params, sample_X, noise_model=None)
+        # Initialize KFold cross-validator
+        kf = KFold(n_splits=6)
+
+        # Store metrics across all folds
+        qead_results_noise = []
+        qead_results_no_noise = []
+        qsa_results_noise = []
+        qsa_results_no_noise = []
+        classical_results = []
+
+        for train_index, test_index in kf.split(X):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y_true[train_index], y_true[test_index]
+
+            # Quantum Enhanced Anomaly Detection (QEAD) with and without noise
+            anomaly_scores_qead_noise = []
+            anomaly_scores_qead_no_noise = []
             
-            anomaly_scores_qead_noise.append(score_with_noise)
-            anomaly_scores_qead_no_noise.append(score_without_noise)
-        
-        # Quantum Self-Attention (QSA) with and without noise
-        anomaly_scores_qsa_noise = quantum_self_attention_anomaly_detection(X_test, noise_model)
-        anomaly_scores_qsa_no_noise = quantum_self_attention_anomaly_detection(X_test, noise_model=None)
+            for sample_X in tqdm(X_test, desc="QEAD with Noise"):
+                initial_params = np.random.rand(len(sample_X)) * 2 * np.pi
+                optimized_params = optimize_params(sample_X, initial_params, noise_model=noise_model)
+                score_with_noise = objective_function(optimized_params, sample_X, noise_model=noise_model)
+                score_without_noise = objective_function(optimized_params, sample_X, noise_model=None)
+                
+                anomaly_scores_qead_noise.append(score_with_noise)
+                anomaly_scores_qead_no_noise.append(score_without_noise)
+            
+            # Quantum Self-Attention (QSA) with and without noise
+            anomaly_scores_qsa_noise = quantum_self_attention_anomaly_detection(X_train, X_test, noise_model)
+            anomaly_scores_qsa_no_noise = quantum_self_attention_anomaly_detection(X_train, X_test, noise_model=None)
 
-        # Apply threshold for anomaly detection
-        smart_threshold_qead_noise = calculate_smart_threshold(anomaly_scores_qead_noise)
-        y_pred_qead_noise = [1 if score > smart_threshold_qead_noise else 0 for score in anomaly_scores_qead_noise]
+            # Apply threshold for anomaly detection
+            smart_threshold_qead_noise = calculate_smart_threshold(anomaly_scores_qead_noise)
+            y_pred_qead_noise = [1 if score > smart_threshold_qead_noise else 0 for score in anomaly_scores_qead_noise]
 
-        smart_threshold_qead_no_noise = calculate_smart_threshold(anomaly_scores_qead_no_noise)
-        y_pred_qead_no_noise = [1 if score > smart_threshold_qead_no_noise else 0 for score in anomaly_scores_qead_no_noise]
+            smart_threshold_qead_no_noise = calculate_smart_threshold(anomaly_scores_qead_no_noise)
+            y_pred_qead_no_noise = [1 if score > smart_threshold_qead_no_noise else 0 for score in anomaly_scores_qead_no_noise]
 
-        smart_threshold_qsa_noise = calculate_smart_threshold(anomaly_scores_qsa_noise)
-        y_pred_qsa_noise = [1 if score > smart_threshold_qsa_noise else 0 for score in anomaly_scores_qsa_noise]
+            smart_threshold_qsa_noise = calculate_smart_threshold(anomaly_scores_qsa_noise)
+            y_pred_qsa_noise = [1 if score > smart_threshold_qsa_noise else 0 for score in anomaly_scores_qsa_noise]
 
-        smart_threshold_qsa_no_noise = calculate_smart_threshold(anomaly_scores_qsa_no_noise)
-        y_pred_qsa_no_noise = [1 if score > smart_threshold_qsa_no_noise else 0 for score in anomaly_scores_qsa_no_noise]
+            smart_threshold_qsa_no_noise = calculate_smart_threshold(anomaly_scores_qsa_no_noise)
+            y_pred_qsa_no_noise = [1 if score > smart_threshold_qsa_no_noise else 0 for score in anomaly_scores_qsa_no_noise]
 
-        # Calculate metrics for QEAD and QSA with and without noise
-        quantum_metrics_qead_noise = calculate_metrics(y_test[:len(y_pred_qead_noise)], y_pred_qead_noise)
-        quantum_metrics_qead_no_noise = calculate_metrics(y_test[:len(y_pred_qead_no_noise)], y_pred_qead_no_noise)
-        quantum_metrics_qsa_noise = calculate_metrics(y_test[:len(y_pred_qsa_noise)], y_pred_qsa_noise)
-        quantum_metrics_qsa_no_noise = calculate_metrics(y_test[:len(y_pred_qsa_no_noise)], y_pred_qsa_no_noise)
+            # Calculate metrics for QEAD and QSA with and without noise
+            qead_results_noise.append(calculate_metrics(y_test, y_pred_qead_noise))
+            qead_results_no_noise.append(calculate_metrics(y_test, y_pred_qead_no_noise))
+            qsa_results_noise.append(calculate_metrics(y_test, y_pred_qsa_noise))
+            qsa_results_no_noise.append(calculate_metrics(y_test, y_pred_qsa_no_noise))
 
-        # Classical methods comparison
-        classical_accuracies = classical_methods(X_train, y_train, X_test, y_test)
+            # Classical methods comparison
+            classical_results.append(classical_methods(X_train, y_train, X_test, y_test))
 
+        # Average the results across folds
         results[name] = {
-            'quantum_metrics_qead_noise': quantum_metrics_qead_noise,
-            'quantum_metrics_qead_no_noise': quantum_metrics_qead_no_noise,
-            'quantum_metrics_qsa_noise': quantum_metrics_qsa_noise,
-            'quantum_metrics_qsa_no_noise': quantum_metrics_qsa_no_noise,
-            'classical_accuracies': classical_accuracies
+            'quantum_metrics_qead_noise': average_metrics(qead_results_noise),
+            'quantum_metrics_qead_no_noise': average_metrics(qead_results_no_noise),
+            'quantum_metrics_qsa_noise': average_metrics(qsa_results_noise),
+            'quantum_metrics_qsa_no_noise': average_metrics(qsa_results_no_noise),
+            'classical_accuracies': average_classical_metrics(classical_results)
         }
 
     return results
+
+# Function to average metrics across folds
+def average_metrics(fold_metrics):
+    avg_metrics = {}
+    for key in fold_metrics[0].keys():
+        avg_metrics[key] = np.mean([metrics[key] for metrics in fold_metrics])
+    return avg_metrics
+
+# Function to average classical results across folds
+def average_classical_metrics(fold_classical_results):
+    avg_classical = {}
+    for method in fold_classical_results[0]:
+        avg_classical[method] = average_metrics([fold[method] for fold in fold_classical_results])
+    return avg_classical
 
 # Print comparison table with NAB Score for all methods
 def print_comparison_table(results):
@@ -323,7 +378,7 @@ def calculate_nab_score(tp_rate, tn_rate, weights):
 # Main script execution
 def main():
     datasets = load_datasets()
-    results = run_comparison_with_and_without_noise(datasets, qubit_no=4)
+    results = run_comparison_with_and_without_noise_6fold(datasets, qubit_no=4)
     print_comparison_table(results)
 
 if __name__ == "__main__":
