@@ -25,6 +25,7 @@ warnings.filterwarnings("ignore")
 
 # Set dataset path and file name for the Bearing dataset
 dataset_path = "/home/bilz/datasets/qead/q/"
+results_path = '/home/bilz/results/'
 dataset_name = "Bearing.csv"
 
 # Use a non-interactive backend to avoid "Wayland" issues
@@ -44,22 +45,21 @@ class BearingDataset(data.Dataset):
         return self.X[index], self.y[index]
 
 # Preprocessing function for Bearing dataset
-def preprocess_data(data, window_size=20):
-    print(f"Preprocessing bearing data with window size {window_size}...")
+def preprocess_data(data, bearing_name, window_size=20):
+    print(f"Preprocessing {bearing_name} data with window size {window_size}...")
 
     if data.empty:
         raise ValueError("Dataset is empty.")
 
     scaler = MinMaxScaler(feature_range=(0, np.pi))
     
-    # Process the bearing data
-    if 'Bearing 1' in data.columns:
-        print("Processing bearing data from 'Bearing 1'...")
-        data['Bearing 1'] = scaler.fit_transform(data['Bearing 1'].values.reshape(-1, 1))
-        X = np.array([data['Bearing 1'].values[i:i + window_size] for i in range(len(data) - window_size)])
-        y_true = np.array([1 if val > 0.8 else 0 for val in data['Bearing 1'][window_size:]])
+    if bearing_name in data.columns:
+        print(f"Processing data from '{bearing_name}'...")
+        data[bearing_name] = scaler.fit_transform(data[bearing_name].values.reshape(-1, 1))
+        X = np.array([data[bearing_name].values[i:i + window_size] for i in range(len(data) - window_size)])
+        y_true = np.array([1 if val > 0.8 else 0 for val in data[bearing_name][window_size:]])
     else:
-        raise ValueError("Unknown data format in dataset.")
+        raise ValueError(f"Unknown data format in dataset for {bearing_name}.")
     
     print("Preprocessing complete.")
     return X, y_true
@@ -70,7 +70,7 @@ def load_datasets():
     file_path = dataset_path + dataset_name
     data_Bearing = pd.read_csv(file_path)
     print(f"Loaded Bearing dataset with columns: {data_Bearing.columns}")
-    return {'Bearing': data_Bearing}
+    return data_Bearing
 
 # Quantum encoding function
 def encode_data(X):
@@ -123,21 +123,17 @@ class QuantumSelfAttention:
         self.num_inputs = num_inputs
         self.qc = QuantumCircuit(self.num_inputs)
 
-    # Method to encode classical inputs as quantum states
     def encode_inputs(self, inputs):
         for i, value in enumerate(inputs):
             self.qc.ry(value, i)
 
-    # Apply ansatz circuit for Query, Key, Value generation
     def apply_ansatz(self):
         for i in range(self.num_inputs):
             self.qc.rx(np.pi/4, i)
 
-    # Measurement of query/key
     def measure_attention(self):
         self.qc.measure_all()
 
-    # Simulate the quantum attention circuit
     def simulate(self, noise_model=None):
         simulator = AerSimulator(noise_model=noise_model)
         job = simulator.run(self.qc)
@@ -145,21 +141,19 @@ class QuantumSelfAttention:
         counts = result.get_counts(self.qc)
         return counts
 
-    # Run the full quantum self-attention circuit
     def run(self, inputs, noise_model=None):
         self.encode_inputs(inputs)
         self.apply_ansatz()
         self.measure_attention()
         return self.simulate(noise_model=noise_model)
 
-    # Process the output from quantum self-attention circuit to get anomaly scores
     def process_attention_output(self, result):
         counts = list(result.values())
         probabilities = np.array(counts) / sum(counts)
         score = 1 - probabilities[0]
         return score
 
-# Define various DNN models: CNN, LSTM, GRU, CNN-LSTM, CNN-GRU, CNN-MHA, and Self-Attention DNN
+# Define DNN Models: CNN, LSTM, GRU, CNN-LSTM, CNN-GRU, CNN-MHA, Self-Attention DNN
 class CNNModel(nn.Module):
     def __init__(self, input_size, output_size):
         super(CNNModel, self).__init__()
@@ -171,7 +165,7 @@ class CNNModel(nn.Module):
         self.flatten = nn.Flatten()
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # Add channel dimension for CNN
+        x = x.unsqueeze(1)
         x = self.relu(self.conv1(x))
         x = self.relu(self.conv2(x))
         x = self.flatten(x)
@@ -179,7 +173,6 @@ class CNNModel(nn.Module):
         x = self.fc2(x)
         return x
 
-# Define LSTM Model in PyTorch
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(LSTMModel, self).__init__()
@@ -187,12 +180,10 @@ class LSTMModel(nn.Module):
         self.fc1 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # Ensure the input has the right shape (batch, seq_len, input_size)
+        x = x.unsqueeze(1)
         lstm_out, _ = self.lstm(x)
-        return self.fc1(lstm_out[:, -1, :])  # Extract the last time-step output
+        return self.fc1(lstm_out[:, -1, :])
 
-
-# Define GRU Model in PyTorch
 class GRUModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(GRUModel, self).__init__()
@@ -200,12 +191,10 @@ class GRUModel(nn.Module):
         self.fc1 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # Ensure the input has the right shape (batch, seq_len, input_size)
+        x = x.unsqueeze(1)
         gru_out, _ = self.gru(x)
-        return self.fc1(gru_out[:, -1, :])  # Extract the last time-step output
+        return self.fc1(gru_out[:, -1, :])
 
-
-# Define CNN-LSTM Model in PyTorch
 class CNNLSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(CNNLSTMModel, self).__init__()
@@ -215,28 +204,26 @@ class CNNLSTMModel(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # Ensure the input has the right shape (batch, channels, input_size)
+        x = x.unsqueeze(1)
         x = self.relu(self.conv1(x))
-        x = x.permute(0, 2, 1)  # LSTM expects (batch, seq_len, input_size), adjust dimensions
+        x = x.permute(0, 2, 1)
         x, _ = self.lstm(x)
-        return self.fc1(x[:, -1, :])  # Extract the last time-step output
-
+        return self.fc1(x[:, -1, :])
 
 class CNNGRUModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(CNNGRUModel, self).__init__()
-        self.conv1 = nn.Conv1d(1, 16, kernel_size=3, padding=1)  # 16 output channels
-        self.gru = nn.GRU(16, hidden_size, batch_first=True)      # GRU expects 16 input features
+        self.conv1 = nn.Conv1d(1, 16, kernel_size=3, padding=1)
+        self.gru = nn.GRU(16, hidden_size, batch_first=True)
         self.fc1 = nn.Linear(hidden_size, output_size)
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # Add channel dimension for CNN (batch_size, 1, input_size)
-        x = self.relu(self.conv1(x))  # (batch_size, 16, input_size)
-        x = x.permute(0, 2, 1)  # Change to (batch_size, input_size, 16) for GRU
-        x, _ = self.gru(x)  # (batch_size, input_size, hidden_size)
-        return self.fc1(x[:, -1, :])  # Extract the last time-step output
-
+        x = x.unsqueeze(1)
+        x = self.relu(self.conv1(x))
+        x = x.permute(0, 2, 1)
+        x, _ = self.gru(x)
+        return self.fc1(x[:, -1, :])
 
 class CNNMHA(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -248,14 +235,14 @@ class CNNMHA(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = x.unsqueeze(1)  # Add channel dimension for CNN
+        x = x.unsqueeze(1)
         x = self.relu(self.conv1(x))
-        x = x.permute(2, 0, 1)  # MultiheadAttention expects (seq_len, batch, embed_dim)
+        x = x.permute(2, 0, 1)
         attn_output, _ = self.mha(x, x, x)
-        attn_output = attn_output.permute(1, 0, 2)  # Convert back to (batch, seq_len, embed_dim)
+        attn_output = attn_output.permute(1, 0, 2)
         x = self.relu(self.fc1(attn_output[:, -1, :]))
         return self.fc2(x)
-    
+
 class SelfAttentionDNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_heads, output_size):
         super(SelfAttentionDNN, self).__init__()
@@ -265,9 +252,9 @@ class SelfAttentionDNN(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = x.unsqueeze(0)  # Add batch dimension for attention
+        x = x.unsqueeze(0)
         attn_output, _ = self.attention(x, x, x)
-        attn_output = attn_output.squeeze(0)  # Remove batch dimension
+        attn_output = attn_output.squeeze(0)
         x = self.relu(self.fc1(attn_output))
         x = self.fc2(x)
         return x
@@ -378,7 +365,7 @@ def classical_methods(X_train, y_train, X_test, y_test):
         'Elliptic Envelope': EllipticEnvelope(),
         'Isolation Forest': IsolationForest(),
         'One-Class SVM': OneClassSVM(),
-        'Local Outlier Factor': LocalOutlierFactor(novelty=True)  # novelty=True allows predict method
+        'Local Outlier Factor': LocalOutlierFactor(novelty=True)  
     }
 
     results = {}
@@ -396,14 +383,14 @@ def classical_methods(X_train, y_train, X_test, y_test):
     return results
 
 # Run comparison between QEAD, QSA, DNN (Self-Attention, CNN, LSTM, GRU, etc.), and Classical models
-def run_comparison(datasets, window_size=20, device='cpu'):
+def run_comparison(datasets, bearing_name, window_size=20, device='cpu'):
     nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
     results = {}
     y_test_dict = {}
 
     for name, data in datasets.items():
         print(f"\nProcessing dataset: {name}")
-        X, y_true = preprocess_data(data, window_size)
+        X, y_true = preprocess_data(data, bearing_name, window_size)
         X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42)
 
         # Save y_test for later use in the comparison table
@@ -467,105 +454,114 @@ def run_comparison(datasets, window_size=20, device='cpu'):
 
     return results, y_test_dict
 
-# Print comparison table with all DNN models and Classical Models
-def print_comparison_table(results, y_test_dict):
-    print(f"\n{'Method':<25} {'MCC':<8} {'F1':<8} {'Accuracy':<10} {'TP Rate':<10} {'TN Rate':<10} {'PR AUC':<8} {'ROC AUC':<8} {'NAB Score':<10}")
+# Print comparison table and save results to text files
+def print_comparison_table(results, y_test_dict, bearing_name):
+    results_path = '/home/bilz/results/'
+    filename = results_path + f'results_{bearing_name}.txt'
 
-    nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
-    
-    for dataset_name, res in results.items():
-        y_test = y_test_dict[dataset_name]  # Get y_test for the current dataset
+    with open(filename, 'w') as f:
+        f.write(f"\n{'Method':<25} {'MCC':<8} {'F1':<8} {'Accuracy':<10} {'TP Rate':<10} {'TN Rate':<10} {'PR AUC':<8} {'ROC AUC':<8} {'NAB Score':<10}\n")
 
-        print(f"\nComparison Table for Dataset: {dataset_name}")
-        
-        # Quantum Method (QEAD)
-        qead_metrics = res['qead_metrics']
-        nab_score_qead = res['nab_scores']['QEAD']
-        pr_auc_str = qead_metrics.get('PR AUC', 'N/A')
-        roc_auc_str = qead_metrics.get('ROC AUC', 'N/A')
+        nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
 
-        print(f"{'Quantum Method (QEAD)':<25} "
-              f"{qead_metrics['MCC']:<8.3f} "
-              f"{qead_metrics['F1']:<8.3f} "
-              f"{qead_metrics['Accuracy']:<10.3f} "
-              f"{qead_metrics['TP Rate']:<10.3f} "
-              f"{qead_metrics['TN Rate']:<10.3f} "
-              f"{pr_auc_str:<8} "
-              f"{roc_auc_str:<8} "
-              f"{nab_score_qead:<10.3f}")
-        
-        # Quantum Self-Attention (QSA)
-        qsa_metrics = res['qsa_metrics']
-        nab_score_qsa = res['nab_scores']['QSA']
-        pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
-        roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
+        for dataset_name, res in results.items():
+            y_test = y_test_dict[dataset_name]  # Get y_test for the current dataset
 
-        print(f"{'Quantum Method (QSA)':<25} "
-              f"{qsa_metrics['MCC']:<8.3f} "
-              f"{qsa_metrics['F1']:<8.3f} "
-              f"{qsa_metrics['Accuracy']:<10.3f} "
-              f"{qsa_metrics['TP Rate']:<10.3f} "
-              f"{qsa_metrics['TN Rate']:<10.3f} "
-              f"{pr_auc_str:<8} "
-              f"{roc_auc_str:<8} "
-              f"{nab_score_qsa:<10.3f}")
+            f.write(f"\nComparison Table for Dataset: {dataset_name}\n")
 
-        # DNN Models (Self-Attention, CNN, LSTM, GRU, CNN-LSTM, etc.)
-        dnn_results = res['dnn_results']
-        for model_type, dnn_result in dnn_results.items():
-            dnn_metrics = dnn_result['metrics']
-            nab_score_dnn = dnn_result['nab_score']
-            pr_auc_str = dnn_metrics.get('PR AUC', 'N/A')
-            roc_auc_str = dnn_metrics.get('ROC AUC', 'N/A')
+            # Quantum Method (QEAD)
+            qead_metrics = res['qead_metrics']
+            nab_score_qead = res['nab_scores']['QEAD']
+            pr_auc_str = qead_metrics.get('PR AUC', 'N/A')
+            roc_auc_str = qead_metrics.get('ROC AUC', 'N/A')
 
-            print(f"{model_type.upper() + ' DNN':<25} "
-                  f"{dnn_metrics['MCC']:<8.3f} "
-                  f"{dnn_metrics['F1']:<8.3f} "
-                  f"{dnn_metrics['Accuracy']:<10.3f} "
-                  f"{dnn_metrics['TP Rate']:<10.3f} "
-                  f"{dnn_metrics['TN Rate']:<10.3f} "
-                  f"{pr_auc_str:<8} "
-                  f"{roc_auc_str:<8} "
-                  f"{nab_score_dnn:<10.3f}")
+            f.write(f"{'Quantum Method (QEAD)':<25} "
+                    f"{qead_metrics['MCC']:<8.3f} "
+                    f"{qead_metrics['F1']:<8.3f} "
+                    f"{qead_metrics['Accuracy']:<10.3f} "
+                    f"{qead_metrics['TP Rate']:<10.3f} "
+                    f"{qead_metrics['TN Rate']:<10.3f} "
+                    f"{pr_auc_str:<8} "
+                    f"{roc_auc_str:<8} "
+                    f"{nab_score_qead:<10.3f}\n")
 
-        # Classical models
-        print("\nClassical Models:")
-        classical_accuracies = res['classical_metrics']
-        
-        for method, (y_pred, y_pred_proba) in classical_accuracies.items():
-            accuracy = accuracy_score(y_test, y_pred)
-            mcc = matthews_corrcoef(y_test, y_pred) if len(set(y_test)) > 1 else 0
-            f1 = f1_score(y_test, y_pred, average='macro')
-            tp_rate = recall_score(y_test, y_pred, average='macro')
-            tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel() if confusion_matrix(y_test, y_pred).size == 4 else (0, 0, 0, 0)
-            tn_rate = tn / (tn + fp) if (tn + fp) > 0 else 0
+            # Quantum Self-Attention (QSA)
+            qsa_metrics = res['qsa_metrics']
+            nab_score_qsa = res['nab_scores']['QSA']
+            pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
+            roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
 
-            pr_auc_str = "N/A"
-            roc_auc_str = "N/A"
-            
-            if y_pred_proba is not None:
-                pr_precision, pr_recall, _ = precision_recall_curve(y_test, y_pred_proba)
-                pr_auc_str = f"{auc(pr_recall, pr_precision):.3f}"
-                roc_auc_str = f"{roc_auc_score(y_test, y_pred_proba):.3f}"
-            
-            # Calculate NAB Score for Classical Method
-            nab_score_classical = calculate_nab_score(tp_rate, tn_rate, nab_weights)
-            print(f"{method:<25} "
-                  f"{mcc:<8.3f} "
-                  f"{f1:<8.3f} "
-                  f"{accuracy:<10.3f} "
-                  f"{tp_rate:<10.3f} "
-                  f"{tn_rate:<10.3f} "
-                  f"{pr_auc_str:<8} "
-                  f"{roc_auc_str:<8} "
-                  f"{nab_score_classical:<10.3f}")
+            f.write(f"{'Quantum Method (QSA)':<25} "
+                    f"{qsa_metrics['MCC']:<8.3f} "
+                    f"{qsa_metrics['F1']:<8.3f} "
+                    f"{qsa_metrics['Accuracy']:<10.3f} "
+                    f"{qsa_metrics['TP Rate']:<10.3f} "
+                    f"{qsa_metrics['TN Rate']:<10.3f} "
+                    f"{pr_auc_str:<8} "
+                    f"{roc_auc_str:<8} "
+                    f"{nab_score_qsa:<10.3f}\n")
+
+            # DNN Models (Self-Attention, CNN, LSTM, GRU, CNN-LSTM, etc.)
+            dnn_results = res['dnn_results']
+            for model_type, dnn_result in dnn_results.items():
+                dnn_metrics = dnn_result['metrics']
+                nab_score_dnn = dnn_result['nab_score']
+                pr_auc_str = dnn_metrics.get('PR AUC', 'N/A')
+                roc_auc_str = dnn_metrics.get('ROC AUC', 'N/A')
+
+                f.write(f"{model_type.upper() + ' DNN':<25} "
+                        f"{dnn_metrics['MCC']:<8.3f} "
+                        f"{dnn_metrics['F1']:<8.3f} "
+                        f"{dnn_metrics['Accuracy']:<10.3f} "
+                        f"{dnn_metrics['TP Rate']:<10.3f} "
+                        f"{dnn_metrics['TN Rate']:<10.3f} "
+                        f"{pr_auc_str:<8} "
+                        f"{roc_auc_str:<8} "
+                        f"{nab_score_dnn:<10.3f}\n")
+
+            # Classical models
+            f.write("\nClassical Models:\n")
+            classical_accuracies = res['classical_metrics']
+
+            for method, (y_pred, y_pred_proba) in classical_accuracies.items():
+                accuracy = accuracy_score(y_test, y_pred)
+                mcc = matthews_corrcoef(y_test, y_pred) if len(set(y_test)) > 1 else 0
+                f1 = f1_score(y_test, y_pred, average='macro')
+                tp_rate = recall_score(y_test, y_pred, average='macro')
+                tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel() if confusion_matrix(y_test, y_pred).size == 4 else (0, 0, 0, 0)
+                tn_rate = tn / (tn + fp) if (tn + fp) > 0 else 0
+
+                pr_auc_str = "N/A"
+                roc_auc_str = "N/A"
+
+                if y_pred_proba is not None:
+                    pr_precision, pr_recall, _ = precision_recall_curve(y_test, y_pred_proba)
+                    pr_auc_str = f"{auc(pr_recall, pr_precision):.3f}"
+                    roc_auc_str = f"{roc_auc_score(y_test, y_pred_proba):.3f}"
+
+                # Calculate NAB Score for Classical Method
+                nab_score_classical = calculate_nab_score(tp_rate, tn_rate, nab_weights)
+                f.write(f"{method:<25} "
+                        f"{mcc:<8.3f} "
+                        f"{f1:<8.3f} "
+                        f"{accuracy:<10.3f} "
+                        f"{tp_rate:<10.3f} "
+                        f"{tn_rate:<10.3f} "
+                        f"{pr_auc_str:<8} "
+                        f"{roc_auc_str:<8} "
+                        f"{nab_score_classical:<10.3f}\n")
 
 # Main script execution
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    datasets = load_datasets()
-    results, y_test_dict = run_comparison(datasets, window_size=4, device=device)
-    print_comparison_table(results, y_test_dict)
+    data = load_datasets()
+
+    # Loop through each bearing and run comparison, then save to file
+    for bearing in ['Bearing 1', 'Bearing 2', 'Bearing 3', 'Bearing 4']:
+        datasets = {'Bearing': data}
+        results, y_test_dict = run_comparison(datasets, bearing, window_size=4, device=device)
+        print_comparison_table(results, y_test_dict, bearing)
 
 if __name__ == "__main__":
     main()
+
