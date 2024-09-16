@@ -14,7 +14,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.covariance import EllipticEnvelope
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-import torch.utils.data as data
+from torch.utils.data import DataLoader
 from scipy.optimize import minimize
 import os
 import psutil
@@ -35,7 +35,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 # Define the BearingDataset class for PyTorch
-class BearingDataset(data.Dataset):
+class BearingDataset(torch.utils.data.Dataset):
     def __init__(self, X, y):
         self.X = torch.tensor(X, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.float32)
@@ -276,9 +276,11 @@ class SelfAttentionDNN(nn.Module):
         return x
 
 # Function to calculate model complexity and memory usage
-def get_model_stats(model, input_size):
+def get_model_stats(model, input_size, device):
     model_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    input_sample = torch.randn(1, input_size)
+    input_sample = torch.randn(1, input_size).to(device)  # Move the input sample to the device
+
+    model = model.to(device)  # Ensure the model is also on the correct device
 
     with torch.no_grad():
         torch.cuda.synchronize() if torch.cuda.is_available() else None
@@ -289,6 +291,7 @@ def get_model_stats(model, input_size):
 
     memory_usage = psutil.virtual_memory().used / (1024 ** 2)  # Memory usage in MB
     return model_parameters, single_pred_time, memory_usage
+
 
 # Updated DNN training function to include time tracking
 def train_dnn_model(model, train_loader, criterion, optimizer, device, epochs=10):
@@ -311,11 +314,11 @@ def train_dnn_model(model, train_loader, criterion, optimizer, device, epochs=10
 # Updated DNN evaluation function to include model stats and saving results to a file
 def evaluate_and_save_results(model, test_loader, device, model_type, X_train, results_file, training_time):
     y_pred, y_true = [], []
-    model_parameters, single_pred_time, memory_usage = get_model_stats(model, X_train.shape[1])
+    model_parameters, single_pred_time, memory_usage = get_model_stats(model, X_train.shape[1], device)  # Pass the device here
 
     with torch.no_grad():
         for inputs, labels in test_loader:
-            inputs = inputs.to(device)
+            inputs = inputs.to(device)  # Move inputs to the correct device
             outputs = model(inputs)
             predictions = (outputs.cpu().numpy() > 0.5).astype(int)
             y_pred.extend(predictions.flatten())
@@ -323,6 +326,13 @@ def evaluate_and_save_results(model, test_loader, device, model_type, X_train, r
 
     metrics = calculate_metrics(y_true, y_pred)
     model_complexity = f"Model Parameters: {model_parameters}, Single Prediction Time: {single_pred_time:.5f}s, Memory Usage: {memory_usage:.2f}MB"
+
+    # Print the results to the console
+    print(f"\nModel: {model_type}")
+    print(f"Metrics: {metrics}")
+    print(f"Training Time: {training_time:.2f}s")
+    print(f"{model_complexity}")
+    print("=" * 50)
 
     # Save the results to a file
     with open(results_file, 'a') as f:
@@ -333,6 +343,8 @@ def evaluate_and_save_results(model, test_loader, device, model_type, X_train, r
         f.write("=" * 50 + "\n")
 
     return metrics
+
+
 
 # NAB Score Calculation Function
 def calculate_nab_score(tp_rate, tn_rate, weights):
@@ -408,6 +420,16 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
         # Save y_test for later use in the comparison table
         y_test_dict[name] = y_test
 
+        # Create dataset loaders for DNN training
+        train_dataset = BearingDataset(X_train, y_train)
+        test_dataset = BearingDataset(X_test, y_test)
+        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=16)
+
+        input_size = X_train.shape[1]
+        hidden_size = 128
+        output_size = 1
+
         # Quantum Enhanced Anomaly Detection (QEAD)
         print(f"Running QEAD for dataset {name}...")
         anomaly_scores_qead = []
@@ -442,10 +464,38 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
 
         for model_type in dnn_models:
             print(f"Running DNN model {model_type.upper()} for dataset {name}...")
-            model_results_file = results_path + f"results_{name}.txt"
+            
+            # Initialize model based on type
+            if model_type == 'cnn':
+                model = CNNModel(input_size=input_size, output_size=output_size)
+            elif model_type == 'lstm':
+                model = LSTMModel(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
+            elif model_type == 'gru':
+                model = GRUModel(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
+            elif model_type == 'cnn_lstm':
+                model = CNNLSTMModel(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
+            elif model_type == 'cnn_gru':
+                model = CNNGRUModel(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
+            elif model_type == 'cnn_mha':
+                model = CNNMHA(input_size=input_size, hidden_size=hidden_size, output_size=output_size)
+            else:
+                model = SelfAttentionDNN(input_size=input_size, hidden_size=hidden_size, num_heads=4, output_size=output_size)
+
+            # Move the model to the specified device (CPU or GPU)
+            model = model.to(device)
+
+            # Define criterion and optimizer
+            criterion = nn.BCEWithLogitsLoss()
+            optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+            # Train the model and calculate training time
             training_time = train_dnn_model(model, train_loader, criterion, optimizer, device, epochs=10)
+
+            # Evaluate model and save results
+            model_results_file = results_path + f"results_{name}.txt"
             dnn_metrics = evaluate_and_save_results(model, test_loader, device, model_type, X_train, model_results_file, training_time)
             nab_score_dnn = calculate_nab_score(dnn_metrics['TP Rate'], dnn_metrics['TN Rate'], nab_weights)
+
             dnn_results[model_type] = {
                 'metrics': dnn_metrics,
                 'nab_score': nab_score_dnn
@@ -467,6 +517,7 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
         }
 
     return results, y_test_dict
+
 
 # Print comparison table with all DNN models and Classical Models
 def print_comparison_table(results, y_test_dict):
