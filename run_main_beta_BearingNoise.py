@@ -31,8 +31,8 @@ import matplotlib
 matplotlib.use('Agg')
 
 # Preprocessing function for Bearing dataset
-def preprocess_data(data, window_size=20):
-    print(f"Preprocessing bearing data with window size {window_size}...")
+def preprocess_data(data, qubit_no=20):
+    print(f"Preprocessing bearing data with qubit no {qubit_no}...")
 
     if data.empty:
         raise ValueError("Dataset is empty.")
@@ -43,8 +43,8 @@ def preprocess_data(data, window_size=20):
     if 'Bearing 1' in data.columns:
         print("Processing bearing data from 'Bearing 1'...")
         data['Bearing 1'] = scaler.fit_transform(data['Bearing 1'].values.reshape(-1, 1))
-        X = np.array([data['Bearing 1'].values[i:i + window_size] for i in range(len(data) - window_size)])
-        y_true = np.array([1 if val > 0.8 else 0 for val in data['Bearing 1'][window_size:]])
+        X = np.array([data['Bearing 1'].values[i:i + qubit_no] for i in range(len(data) - qubit_no)])
+        y_true = np.array([1 if val > 0.8 else 0 for val in data['Bearing 1'][qubit_no:]])
     else:
         raise ValueError("Unknown data format in dataset.")
     
@@ -144,7 +144,7 @@ def create_noise_models():
     return noise_model
 
 # Quantum and classical comparison function with noise support
-def run_comparison_with_noise(datasets, window_size=20):
+def run_comparison_with_noise(datasets, qubit_no=20):
     results = {}
 
     # Create the noise models
@@ -152,7 +152,7 @@ def run_comparison_with_noise(datasets, window_size=20):
 
     for name, data in datasets.items():
         print(f"\nProcessing dataset: {name}")
-        X, y_true = preprocess_data(data, window_size)
+        X, y_true = preprocess_data(data, qubit_no)
         X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42)
 
         # Quantum anomaly detection with noise
@@ -226,7 +226,7 @@ def classical_methods(X_train, y_train, X_test, y_test):
         'Linear Regression': LogisticRegression(),
         'Naive Bayes': GaussianNB(),
         'SVM (Radial)': SVC(kernel='rbf', probability=True),
-        'SVM (Linear)': SVC(kernel='linear', probability=True),
+        'SVM (Linear)': SVC(kernel='linear', probability=True), 
         'K-Nearest Neighbors': KNeighborsClassifier(n_neighbors=3),
         'Robust Covariance': EllipticEnvelope(),
         'Isolation Forest': IsolationForest(),
@@ -246,7 +246,7 @@ def classical_methods(X_train, y_train, X_test, y_test):
         else:
             y_pred = model.predict(X_test)
             results[name] = (y_pred, None)  # No probability predictions available
-
+  
     return results
 
 # Smart threshold using IQR
@@ -315,7 +315,7 @@ def print_comparison_table(results):
 # Main script execution
 def main():
     datasets = load_datasets()
-    results = run_comparison_with_noise(datasets, window_size=4)
+    results = run_comparison_with_noise(datasets, qubit_no=4)
     print_comparison_table(results)
 
 if __name__ == "__main__":
