@@ -12,17 +12,16 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.covariance import EllipticEnvelope
-from scipy.optimize import minimize
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+import torch.utils.data as data
+from scipy.optimize import minimize
 import os
 from qiskit_aer import AerSimulator
 from qiskit import QuantumCircuit
 from qiskit.primitives import Estimator
 import warnings
 warnings.filterwarnings("ignore")
-import torch.utils.data as data
 
 # Set dataset path and file name for the Bearing dataset
 dataset_path = "/home/bilz/datasets/qead/q/"
@@ -266,15 +265,140 @@ def calculate_metrics(y_true, y_pred, y_pred_proba=None):
         "TN Rate": tn_rate
     }
 
-# Define run_comparison function with NAB Score calculation
+# Classical anomaly detection models
+def classical_methods(X_train, y_train, X_test, y_test):
+    models = {
+        'Random Forest': RandomForestClassifier(),
+        'Decision Tree': DecisionTreeClassifier(),
+        'Gradient Boosting': GradientBoostingClassifier(),
+        'Logistic Regression': LogisticRegression(),
+        'Naive Bayes': GaussianNB(),
+        'SVM (Radial)': SVC(kernel='rbf', probability=True),
+        'K-Nearest Neighbors': KNeighborsClassifier(n_neighbors=3),
+        'Elliptic Envelope': EllipticEnvelope(),
+        'Isolation Forest': IsolationForest(),
+        'One-Class SVM': OneClassSVM(),
+        'Local Outlier Factor': LocalOutlierFactor(novelty=True)  # novelty=True allows predict method
+    }
+
+    results = {}
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        
+        if hasattr(model, "predict_proba"):
+            y_pred_proba = model.predict_proba(X_test)[:, 1]
+            y_pred = model.predict(X_test)
+            results[name] = (y_pred, y_pred_proba)
+        else:
+            y_pred = model.predict(X_test)
+            results[name] = (y_pred, None)
+
+    return results
+
+# Print comparison table with NAB Score and Classical Models
+def print_comparison_table(results, y_test_dict):
+    print(f"\n{'Method':<25} {'MCC':<8} {'F1':<8} {'Accuracy':<10} {'TP Rate':<10} {'TN Rate':<10} {'PR AUC':<8} {'ROC AUC':<8} {'NAB Score':<10}")
+
+    nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
+    
+    for dataset_name, res in results.items():
+        y_test = y_test_dict[dataset_name]  # Get y_test for the current dataset
+
+        print(f"\nComparison Table for Dataset: {dataset_name}")
+        
+        # Quantum Method (QEAD)
+        qead_metrics = res['qead_metrics']
+        nab_score_qead = res['nab_scores']['QEAD']
+        pr_auc_str = qead_metrics.get('PR AUC', 'N/A')
+        roc_auc_str = qead_metrics.get('ROC AUC', 'N/A')
+
+        print(f"{'Quantum Method (QEAD)':<25} "
+              f"{qead_metrics['MCC']:<8.3f} "
+              f"{qead_metrics['F1']:<8.3f} "
+              f"{qead_metrics['Accuracy']:<10.3f} "
+              f"{qead_metrics['TP Rate']:<10.3f} "
+              f"{qead_metrics['TN Rate']:<10.3f} "
+              f"{pr_auc_str:<8} "
+              f"{roc_auc_str:<8} "
+              f"{nab_score_qead:<10.3f}")
+        
+        # Quantum Self-Attention (QSA)
+        qsa_metrics = res['qsa_metrics']
+        nab_score_qsa = res['nab_scores']['QSA']
+        pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
+        roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
+
+        print(f"{'Quantum Method (QSA)':<25} "
+              f"{qsa_metrics['MCC']:<8.3f} "
+              f"{qsa_metrics['F1']:<8.3f} "
+              f"{qsa_metrics['Accuracy']:<10.3f} "
+              f"{qsa_metrics['TP Rate']:<10.3f} "
+              f"{qsa_metrics['TN Rate']:<10.3f} "
+              f"{pr_auc_str:<8} "
+              f"{roc_auc_str:<8} "
+              f"{nab_score_qsa:<10.3f}")
+
+        # DNN Self-Attention
+        dnn_metrics = res['dnn_metrics']
+        nab_score_dnn = res['nab_scores']['DNN']
+        pr_auc_str = dnn_metrics.get('PR AUC', 'N/A')
+        roc_auc_str = dnn_metrics.get('ROC AUC', 'N/A')
+
+        print(f"{'DNN Self-Attention':<25} "
+              f"{dnn_metrics['MCC']:<8.3f} "
+              f"{dnn_metrics['F1']:<8.3f} "
+              f"{dnn_metrics['Accuracy']:<10.3f} "
+              f"{dnn_metrics['TP Rate']:<10.3f} "
+              f"{dnn_metrics['TN Rate']:<10.3f} "
+              f"{pr_auc_str:<8} "
+              f"{roc_auc_str:<8} "
+              f"{nab_score_dnn:<10.3f}")
+
+        # Classical models
+        print("\nClassical Models:")
+        classical_accuracies = res['classical_metrics']
+        
+        for method, (y_pred, y_pred_proba) in classical_accuracies.items():
+            accuracy = accuracy_score(y_test, y_pred)
+            mcc = matthews_corrcoef(y_test, y_pred) if len(set(y_test)) > 1 else 0
+            f1 = f1_score(y_test, y_pred, average='macro')
+            tp_rate = recall_score(y_test, y_pred, average='macro')
+            tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel() if confusion_matrix(y_test, y_pred).size == 4 else (0, 0, 0, 0)
+            tn_rate = tn / (tn + fp) if (tn + fp) > 0 else 0
+
+            pr_auc_str = "N/A"
+            roc_auc_str = "N/A"
+            
+            if y_pred_proba is not None:
+                pr_precision, pr_recall, _ = precision_recall_curve(y_test, y_pred_proba)
+                pr_auc_str = f"{auc(pr_recall, pr_precision):.3f}"
+                roc_auc_str = f"{roc_auc_score(y_test, y_pred_proba):.3f}"
+            
+            # Calculate NAB Score for Classical Method
+            nab_score_classical = calculate_nab_score(tp_rate, tn_rate, nab_weights)
+            print(f"{method:<25} "
+                  f"{mcc:<8.3f} "
+                  f"{f1:<8.3f} "
+                  f"{accuracy:<10.3f} "
+                  f"{tp_rate:<10.3f} "
+                  f"{tn_rate:<10.3f} "
+                  f"{pr_auc_str:<8} "
+                  f"{roc_auc_str:<8} "
+                  f"{nab_score_classical:<10.3f}")
+
+# Run comparison between QEAD, QSA, DNN, and Classical models
 def run_comparison(datasets, window_size=20, device='cpu'):
     nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
     results = {}
+    y_test_dict = {}
 
     for name, data in datasets.items():
         print(f"\nProcessing dataset: {name}")
         X, y_true = preprocess_data(data, window_size)
         X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42)
+
+        # Save y_test for later use in the comparison table
+        y_test_dict[name] = y_test
 
         # Quantum Enhanced Anomaly Detection (QEAD)
         print(f"Running QEAD for dataset {name}...")
@@ -309,6 +433,10 @@ def run_comparison(datasets, window_size=20, device='cpu'):
         dnn_metrics = dnn_anomaly_detection(X_train, y_train, X_test, y_test, device)
         nab_score_dnn = calculate_nab_score(dnn_metrics['TP Rate'], dnn_metrics['TN Rate'], nab_weights)
 
+        # Classical methods comparison
+        print(f"Running Classical Models for dataset {name}...")
+        classical_accuracies = classical_methods(X_train, y_train, X_test, y_test)
+
         results[name] = {
             'qead_metrics': qead_metrics,
             'qsa_metrics': qsa_metrics,
@@ -317,34 +445,19 @@ def run_comparison(datasets, window_size=20, device='cpu'):
                 'QEAD': nab_score_qead,
                 'QSA': nab_score_qsa,
                 'DNN': nab_score_dnn
-            }
+            },
+            'classical_metrics': classical_accuracies
         }
 
-    return results
-
-# Print comparison table with NAB Score
-def print_comparison_table(results):
-    for dataset_name, res in results.items():
-        print(f"\nComparison Table for Dataset: {dataset_name}")
-        for method, metrics in res.items():
-            if method == 'nab_scores':
-                print(f"\nNAB Scores:")
-                for key, value in metrics.items():
-                    print(f"{key}: {value}")
-            else:
-                print(f"{method:<20} "
-                      f"Accuracy: {metrics['Accuracy']:<8.3f} "
-                      f"MCC: {metrics['MCC']:<8.3f} "
-                      f"F1: {metrics['F1']:<8.3f} "
-                      f"TP Rate: {metrics['TP Rate']:<8.3f} "
-                      f"TN Rate: {metrics['TN Rate']:<8.3f}")
+    return results, y_test_dict
 
 # Main script execution
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     datasets = load_datasets()
-    results = run_comparison(datasets, window_size=4, device=device)
-    print_comparison_table(results)
+    results, y_test_dict = run_comparison(datasets, window_size=4, device=device)
+    print_comparison_table(results, y_test_dict)
 
 if __name__ == "__main__":
     main()
+
