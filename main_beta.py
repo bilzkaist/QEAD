@@ -194,7 +194,6 @@ class LSTMModel(nn.Module):
         lstm_out, _ = self.lstm(x)
         return self.fc1(lstm_out[:, -1, :])  # Extract the last time-step output
 
-
 # Define GRU Model in PyTorch
 class GRUModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -206,7 +205,6 @@ class GRUModel(nn.Module):
         x = x.unsqueeze(1)  # Ensure the input has the right shape (batch, seq_len, input_size)
         gru_out, _ = self.gru(x)
         return self.fc1(gru_out[:, -1, :])  # Extract the last time-step output
-
 
 # Define CNN-LSTM Model in PyTorch
 class CNNLSTMModel(nn.Module):
@@ -224,7 +222,6 @@ class CNNLSTMModel(nn.Module):
         x, _ = self.lstm(x)
         return self.fc1(x[:, -1, :])  # Extract the last time-step output
 
-
 class CNNGRUModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(CNNGRUModel, self).__init__()
@@ -239,7 +236,6 @@ class CNNGRUModel(nn.Module):
         x = x.permute(0, 2, 1)  # Change to (batch_size, input_size, 16) for GRU
         x, _ = self.gru(x)  # (batch_size, input_size, hidden_size)
         return self.fc1(x[:, -1, :])  # Extract the last time-step output
-
 
 class CNNMHA(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -291,7 +287,6 @@ def get_model_stats(model, input_size, device):
 
     memory_usage = psutil.virtual_memory().used / (1024 ** 2)  # Memory usage in MB
     return model_parameters, single_pred_time, memory_usage
-
 
 # Updated DNN training function to include time tracking
 def train_dnn_model(model, train_loader, criterion, optimizer, device, epochs=10):
@@ -355,9 +350,6 @@ def evaluate_and_save_results(model, test_loader, device, model_type, X_train, r
 
     return metrics, model_stats
 
-
-
-
 # NAB Score Calculation Function
 def calculate_nab_score(tp_rate, tn_rate, weights):
     fp_rate = 1 - tn_rate
@@ -389,7 +381,7 @@ def calculate_metrics(y_true, y_pred, y_pred_proba=None):
     }
 
 # Classical anomaly detection models
-def classical_methods(X_train, y_train, X_test, y_test):
+def classical_methods(X_train, y_train, X_test, y_test, nab_weights):
     models = {
         'Random Forest': RandomForestClassifier(),
         'Decision Tree': DecisionTreeClassifier(),
@@ -401,22 +393,38 @@ def classical_methods(X_train, y_train, X_test, y_test):
         'Elliptic Envelope': EllipticEnvelope(),
         'Isolation Forest': IsolationForest(),
         'One-Class SVM': OneClassSVM(),
-        'Local Outlier Factor': LocalOutlierFactor(novelty=True)  # novelty=True allows predict method
+        'Local Outlier Factor': LocalOutlierFactor(novelty=True)
     }
 
     results = {}
     for name, model in models.items():
+        start_time = time.time()
         model.fit(X_train, y_train)
+        training_time = time.time() - start_time
 
-        if hasattr(model, "predict_proba"):
-            y_pred_proba = model.predict_proba(X_test)[:, 1]
-            y_pred = model.predict(X_test)
-            results[name] = (y_pred, y_pred_proba)
-        else:
-            y_pred = model.predict(X_test)
-            results[name] = (y_pred, None)
+        model_parameters = len(model.get_params()) if hasattr(model, 'get_params') else 'N/A'
+        memory_usage = psutil.virtual_memory().used / (1024 ** 2)
+
+        y_pred = model.predict(X_test)
+        y_pred_proba = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
+
+        # Calculate metrics
+        metrics = calculate_metrics(y_test, y_pred)
+
+        # NAB Score calculation
+        nab_score = calculate_nab_score(metrics['TP Rate'], metrics['TN Rate'], nab_weights)
+
+        results[name] = {
+            'y_pred': y_pred,
+            'y_pred_proba': y_pred_proba,
+            'training_time': training_time,
+            'complexity': model_parameters,
+            'memory_usage': memory_usage,
+            'nab_score': nab_score  # Store NAB score
+        }
 
     return results
+
 
 # Run comparison between QEAD, QSA, DNN (Self-Attention, CNN, LSTM, GRU, etc.), and Classical models
 def run_comparison(datasets, qubit_no=20, device='cpu'):
@@ -548,32 +556,29 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
 
         ### Classical Methods ###
         print(f"Running Classical Models for dataset {name}...")
-        classical_accuracies = classical_methods(X_train, y_train, X_test, y_test)
+        classical_accuracies = classical_methods(X_train, y_train, X_test, y_test, nab_weights)
 
-        for method, (y_pred, y_pred_proba) in classical_accuracies.items():
+
+        classical_results = {}
+        for method, values in classical_accuracies.items():
+            y_pred = values['y_pred']
+            y_pred_proba = values.get('y_pred_proba')
             model_metrics = calculate_metrics(y_test, y_pred)
-            classical_complexity = 'N/A'
 
-            results[name]['classical_metrics'] = {
-                method: {
-                    'metrics': model_metrics,
-                    'complexity': classical_complexity,
-                    'training_time': 'N/A',
-                    'memory_usage': 'N/A'
-                }
+            classical_results[method] = {
+                'metrics': model_metrics,
+                'complexity': values['complexity'],
+                'training_time': values['training_time'],
+                'memory_usage': values['memory_usage']
             }
 
+        results[name]['classical_metrics'] = classical_results
+
     return results, y_test_dict
-
-
-
-
 
 # Print comparison table with all DNN models and Classical Models
 def print_comparison_table(results, y_test_dict):
     print(f"\n{'Method':<25} {'MCC':<8} {'F1':<8} {'Accuracy':<10} {'TP Rate':<10} {'TN Rate':<10} {'PR AUC':<8} {'ROC AUC':<8} {'NAB Score':<10} {'Complexity':<12} {'Time (s)':<12} {'Size (MB)':<10}")
-
-    nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
 
     for dataset_name, res in results.items():
         y_test = y_test_dict[dataset_name]  # Get y_test for the current dataset
@@ -583,6 +588,8 @@ def print_comparison_table(results, y_test_dict):
         # Quantum Method (QEAD)
         qead_metrics = res['qead_metrics']
         nab_score_qead = res['nab_scores']['QEAD']
+        qead_stats = res['qead_stats']
+
         pr_auc_str = qead_metrics.get('PR AUC', 'N/A')
         roc_auc_str = qead_metrics.get('ROC AUC', 'N/A')
 
@@ -595,11 +602,15 @@ def print_comparison_table(results, y_test_dict):
               f"{pr_auc_str:<8} "
               f"{roc_auc_str:<8} "
               f"{nab_score_qead:<10.3f} "
-              f"{'N/A':<12} {'N/A':<12} {'N/A':<10}")
+              f"{qead_stats['complexity']:<12} "
+              f"{qead_stats['training_time']:<12.5f} "
+              f"{qead_stats['memory_usage']:<10.2f}")
 
         # Quantum Self-Attention (QSA)
         qsa_metrics = res['qsa_metrics']
         nab_score_qsa = res['nab_scores']['QSA']
+        qsa_stats = res['qsa_stats']
+
         pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
         roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
 
@@ -612,20 +623,18 @@ def print_comparison_table(results, y_test_dict):
               f"{pr_auc_str:<8} "
               f"{roc_auc_str:<8} "
               f"{nab_score_qsa:<10.3f} "
-              f"{'N/A':<12} {'N/A':<12} {'N/A':<10}")
+              f"{qsa_stats['complexity']:<12} "
+              f"{qsa_stats['training_time']:<12.5f} "
+              f"{qsa_stats['memory_usage']:<10.2f}")
 
         # DNN Models (Self-Attention, CNN, LSTM, GRU, CNN-LSTM, etc.)
         dnn_results = res['dnn_results']
         for model_type, dnn_result in dnn_results.items():
             dnn_metrics = dnn_result['metrics']
             nab_score_dnn = dnn_result['nab_score']
+
             pr_auc_str = dnn_metrics.get('PR AUC', 'N/A')
             roc_auc_str = dnn_metrics.get('ROC AUC', 'N/A')
-
-            # Extracting additional details for each DNN model
-            model_parameters = dnn_result.get('parameters', 'N/A')
-            training_time = dnn_result.get('training_time', 'N/A')
-            model_size = dnn_result.get('memory_usage', 'N/A')
 
             print(f"{model_type.upper() + ' DNN':<25} "
                   f"{dnn_metrics['MCC']:<8.3f} "
@@ -636,38 +645,48 @@ def print_comparison_table(results, y_test_dict):
                   f"{pr_auc_str:<8} "
                   f"{roc_auc_str:<8} "
                   f"{nab_score_dnn:<10.3f} "
-                  f"{model_parameters:<12} {training_time:<12} {model_size:<10}")
+                  f"{dnn_result['parameters']:<12} "
+                  f"{dnn_result['training_time']:<12.5f} "
+                  f"{dnn_result['memory_usage']:<10.2f}")
 
         # Classical models
         print("\nClassical Models:")
         classical_accuracies = res['classical_metrics']
+        
+        # Define NAB weights (standard profile)
+        nab_weights = {"TP": 1.0, "FP": 0.22, "FN": 1.0}
 
-        for method, (y_pred, y_pred_proba) in classical_accuracies.items():
-            accuracy = accuracy_score(y_test, y_pred)
-            mcc = matthews_corrcoef(y_test, y_pred) if len(set(y_test)) > 1 else 0
-            f1 = f1_score(y_test, y_pred, average='macro')
-            tp_rate = recall_score(y_test, y_pred, average='macro')
-            tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel() if confusion_matrix(y_test, y_pred).size == 4 else (0, 0, 0, 0)
-            tn_rate = tn / (tn + fp) if (tn + fp) > 0 else 0
+        for method, values in classical_accuracies.items():
+            model_metrics = values['metrics']
+            complexity = values['complexity']
+            training_time = values['training_time']
+            memory_usage = values['memory_usage']
+            # Calculate NAB Score for each classical method using TP Rate and TN Rate
+            nab_score_classical = calculate_nab_score(model_metrics['TP Rate'], model_metrics['TN Rate'], nab_weights)
+            nab_score_str = f"{nab_score_classical:.3f}"
+            # nab_score = values.get('nab_score', 'N/A')  # Get NAB score
+
+            accuracy = model_metrics['Accuracy']
+            mcc = model_metrics['MCC']
+            f1 = model_metrics['F1']
+            tp_rate = model_metrics['TP Rate']
+            tn_rate = model_metrics['TN Rate']
 
             pr_auc_str = "N/A"
             roc_auc_str = "N/A"
 
-            if y_pred_proba is not None:
-                pr_precision, pr_recall, _ = precision_recall_curve(y_test, y_pred_proba)
-                pr_auc_str = f"{auc(pr_recall, pr_precision):.3f}"
-                roc_auc_str = f"{roc_auc_score(y_test, y_pred_proba):.3f}"
-
-            # Classical models do not have memory usage and training time information
             print(f"{method:<25} "
-                  f"{mcc:<8.3f} "
-                  f"{f1:<8.3f} "
-                  f"{accuracy:<10.3f} "
-                  f"{tp_rate:<10.3f} "
-                  f"{tn_rate:<10.3f} "
-                  f"{pr_auc_str:<8} "
-                  f"{roc_auc_str:<8} "
-                  f"{'N/A':<10} {'N/A':<12} {'N/A':<12} {'N/A':<10}")
+                f"{mcc:<8.3f} "
+                f"{f1:<8.3f} "
+                f"{accuracy:<10.3f} "
+                f"{tp_rate:<10.3f} "
+                f"{tn_rate:<10.3f} "
+                f"{pr_auc_str:<8} "
+                f"{roc_auc_str:<8} "
+                f"{nab_score_str:<10} "  # Include NAB score in output
+                f"{complexity:<12} "
+                f"{training_time:<12.5f} "
+                f"{memory_usage:<10.2f}")
 
 
 # Main script execution
