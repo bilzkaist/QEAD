@@ -1,4 +1,4 @@
-Running Classical Models for dataset Bearing...
+Running Classical Models for dataset Bearing... Qubit no 4
 
 Method                    MCC      F1       Accuracy   TP Rate    TN Rate    PR AUC   ROC AUC  NAB Score  Complexity   Time (s)     Size (MB) 
 
@@ -24,4 +24,91 @@ K-Nearest Neighbors       0.757    0.878    0.942      0.882      0.965      N/A
 Elliptic Envelope         -0.382   0.020    0.031      0.408      0.000      N/A      N/A      0.000      5            0.16808      6021.62   
 Isolation Forest          -0.261   0.033    0.048      0.450      0.000      N/A      N/A      0.000      9            0.04797      6021.62   
 One-Class SVM             -0.189   0.000    0.000      0.333      0.000      N/A      N/A      0.000      10           0.00428      6022.60   
-Local Outlier Factor      -0.174   0.055    0.085      0.542      0.000      N/A      N/A      0.000      9            0.00210      6022.60   
+Local Outlier Factor      -0.174   0.055    0.085      0.542      0.000      N/A      N/A      0.000      9            0.00210      6022.60 
+
+
+==================================================
+Running Classical Models for dataset Bearing... Qubit no 8
+
+Method                    MCC      F1       Accuracy   TP Rate    TN Rate    PR AUC   ROC AUC  NAB Score  Complexity   Time (s)     Size (MB) 
+
+Comparison Table for Dataset: Bearing
+Quantum Method (QEAD)     0.686    0.837    0.915      0.886      0.925      N/A      N/A      0.755      8            65.39565     5156.68   
+Quantum Method (QSA)      0.000    0.464    0.867      0.500      1.000      N/A      N/A      0.000      8            128.25342    5184.52   
+SELF_ATTENTION DNN        0.735    0.867    0.935      0.887      0.953      N/A      N/A      0.763      1569         1.83218      5354.22   
+CNN DNN                   0.743    0.860    0.945      0.806      0.996      N/A      N/A      0.611      34657        2.31670      5418.02   
+LSTM DNN                  0.451    0.672    0.898      0.626      0.996      N/A      N/A      0.252      70785        0.79886      5445.66   
+GRU DNN                   0.477    0.689    0.901      0.639      0.996      N/A      N/A      0.277      53121        0.64144      5447.12   
+CNN_LSTM DNN              0.707    0.838    0.939      0.780      0.996      N/A      N/A      0.559      74945        0.80465      5468.52   
+CNN_GRU DNN               0.789    0.894    0.952      0.886      0.976      N/A      N/A      0.766      56257        0.75533      5470.23   
+CNN_MHA DNN               0.744    0.863    0.945      0.817      0.992      N/A      N/A      0.631      3457         0.89594      5469.32   
+
+Classical Models:
+Random Forest             0.839    0.920    0.962      0.924      0.976      N/A      N/A      0.843      19           0.07301      5469.33   
+Decision Tree             0.827    0.913    0.959      0.922      0.972      N/A      N/A      0.838      13           0.00124      5469.33   
+Gradient Boosting         0.831    0.915    0.959      0.933      0.969      N/A      N/A      0.859      20           0.14735      5469.96   
+Logistic Regression       0.743    0.860    0.945      0.806      0.996      N/A      N/A      0.611      15           0.00630      5469.74   
+Naive Bayes               0.729    0.856    0.922      0.922      0.921      N/A      N/A      0.827      2            0.00034      5469.74   
+SVM (Radial)              0.779    0.884    0.952      0.842      0.992      N/A      N/A      0.683      15           0.00755      5470.23   
+K-Nearest Neighbors       0.823    0.911    0.959      0.911      0.976      N/A      N/A      0.817      8            0.00842      5470.37   
+Elliptic Envelope         -0.394   0.018    0.027      0.402      0.000      N/A      N/A      0.000      5            0.19968      5472.23   
+Isolation Forest          -0.327   0.031    0.048      0.453      0.000      N/A      N/A      0.000      9            0.04970      5472.23   
+One-Class SVM             -0.191   0.000    0.000      0.333      0.000      N/A      N/A      0.000      10           0.00412      5472.23   
+Local Outlier Factor      -0.210   0.052    0.082      0.538      0.000      N/A      N/A      0.000      9            0.00296      5472.23 
+
+
+Running Classical Models for dataset Bearing... Qubit no 12
+
+Method                    MCC      F1       Accuracy   TP Rate    TN Rate    PR AUC   ROC AUC  NAB Score  Complexity   Time (s)     Size (MB) 
+
+Comparison Table for Dataset: Bearing
+Quantum Method (QEAD)     0.661    0.824    0.914      0.877      0.926      N/A      N/A      0.738      12           94.77069     5125.74   
+Quantum Method (QSA)      0.000    0.468    0.880      0.500      1.000      N/A      N/A      0.000      12           2367.16550   5321.08   
+SELF_ATTENTION DNN        0.792    0.892    0.959      0.853      0.992      N/A      N/A      0.705      2417         0.69908      5497.77   
+CNN DNN                   0.791    0.889    0.959      0.841      0.996      N/A      N/A      0.681      51041        0.59276      5564.45   
+LSTM DNN                  0.390    0.636    0.900      0.598      0.996      N/A      N/A      0.195      72833        0.50892      5585.73   
+GRU DNN                   0.629    0.789    0.931      0.727      0.996      N/A      N/A      0.452      54657        0.48254      5586.46   
+CNN_LSTM DNN              0.772    0.877    0.955      0.827      0.996      N/A      N/A      0.652      74945        0.58917      5607.91   
+CNN_GRU DNN               0.772    0.877    0.955      0.827      0.996      N/A      N/A      0.652      56257        0.55538      5607.20   
+CNN_MHA DNN               0.772    0.877    0.955      0.827      0.996      N/A      N/A      0.652      3457         0.70953      5607.17   
+
+Classical Models:
+Random Forest             0.935    0.968    0.986      0.968      0.992      N/A      N/A      0.933      19           0.08054      5607.17   
+Decision Tree             0.860    0.930    0.969      0.945      0.977      N/A      N/A      0.886      13           0.00246      5607.17   
+Gradient Boosting         0.860    0.930    0.969      0.945      0.977      N/A      N/A      0.886      20           0.19204      5607.17   
+Logistic Regression       0.847    0.920    0.969      0.884      0.996      N/A      N/A      0.767      15           0.00145      5607.17   
+Naive Bayes               0.775    0.874    0.935      0.963      0.926      N/A      N/A      0.909      2            0.00036      5607.17   
+SVM (Radial)              0.829    0.912    0.966      0.882      0.992      N/A      N/A      0.762      15           0.00644      5607.66   
+K-Nearest Neighbors       0.852    0.926    0.969      0.921      0.984      N/A      N/A      0.838      8            0.00054      5607.66   
+Elliptic Envelope         -0.408   0.016    0.024      0.400      0.000      N/A      N/A      0.000      5            0.20270      5613.27   
+Isolation Forest          -0.361   0.016    0.024      0.400      0.000      N/A      N/A      0.000      9            0.05066      5533.38   
+One-Class SVM             -0.219   0.000    0.000      0.333      0.000      N/A      N/A      0.000      10           0.00498      5530.07   
+Local Outlier Factor      -0.284   0.032    0.048      0.467      0.000      N/A      N/A      0.000      9            0.00389      5530.07   
+
+Running Classical Models for dataset Bearing... Qubit no 16
+
+Method                    MCC      F1       Accuracy   TP Rate    TN Rate    PR AUC   ROC AUC  NAB Score  Complexity   Time (s)     Size (MB) 
+
+Comparison Table for Dataset: Bearing
+Quantum Method (QEAD)     0.568    0.783    0.879      0.796      0.918      N/A      N/A      0.574      16           865.42387    5113.00   
+Quantum Method (QSA)      0.000    0.457    0.841      0.500      1.000      N/A      N/A      0.000      16           41499.56750  5605.59   
+SELF_ATTENTION DNN        0.624    0.783    0.910      0.726      0.996      N/A      N/A      0.452      3393         1.01830      5782.04   
+CNN DNN                   0.853    0.926    0.962      0.907      0.988      N/A      N/A      0.811      67425        1.08306      5846.48   
+LSTM DNN                  0.233    0.538    0.852      0.541      0.996      N/A      N/A      0.082      74881        0.62811      5867.39   
+GRU DNN                   0.535    0.724    0.893      0.672      0.996      N/A      N/A      0.343      56193        0.58634      5867.62   
+CNN_LSTM DNN              0.721    0.852    0.931      0.809      0.988      N/A      N/A      0.615      74945        0.67222      5889.95   
+CNN_GRU DNN               0.751    0.867    0.938      0.822      0.992      N/A      N/A      0.642      56257        0.68305      5889.92   
+CNN_MHA DNN               0.693    0.841    0.924      0.805      0.980      N/A      N/A      0.605      3457         0.93015      5888.48   
+
+Classical Models:
+Random Forest             0.814    0.906    0.952      0.892      0.980      N/A      N/A      0.779      19           0.08791      5888.48   
+Decision Tree             0.841    0.920    0.959      0.905      0.984      N/A      N/A      0.806      13           0.00244      5888.48   
+Gradient Boosting         0.778    0.889    0.941      0.886      0.967      N/A      N/A      0.764      20           0.24194      5889.36   
+Logistic Regression       0.720    0.849    0.931      0.800      0.992      N/A      N/A      0.599      15           0.02349      5974.71   
+Naive Bayes               0.755    0.864    0.914      0.940      0.902      N/A      N/A      0.858      2            0.00076      5975.20   
+SVM (Radial)              0.751    0.867    0.938      0.822      0.992      N/A      N/A      0.642      15           0.01315      5974.85   
+K-Nearest Neighbors       0.826    0.912    0.955      0.894      0.984      N/A      N/A      0.784      8            0.00039      5974.85   
+Elliptic Envelope         -0.376   0.023    0.034      0.406      0.000      N/A      N/A      0.000      5            0.21623      5961.65   
+Isolation Forest          -0.305   0.033    0.048      0.435      0.000      N/A      N/A      0.000      9            0.04588      5961.65   
+One-Class SVM             -0.226   0.000    0.000      0.333      0.000      N/A      N/A      0.000      10           0.00374      5961.65   
+Local Outlier Factor      -0.195   0.061    0.097      0.536      0.000      N/A      N/A      0.000      9            0.00670      5960.01 

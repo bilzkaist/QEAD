@@ -539,7 +539,7 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
 
             training_time = train_dnn_model(model, train_loader, criterion, optimizer, device, epochs=10)
 
-            model_results_file = results_path + f"results_{name}.txt"
+            model_results_file = results_path + f"results_{name}_{qubit_no}.txt"
             dnn_metrics, dnn_model_stats = evaluate_and_save_results(model, test_loader, device, model_type, X_train, model_results_file, training_time)
 
             nab_score_dnn = calculate_nab_score(dnn_metrics['TP Rate'], dnn_metrics['TN Rate'], nab_weights)
