@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.metrics import accuracy_score, matthews_corrcoef, f1_score, roc_auc_score, recall_score, precision_recall_curve, auc, confusion_matrix
 from sklearn.ensemble import IsolationForest, RandomForestClassifier, GradientBoostingClassifier
@@ -29,7 +30,7 @@ warnings.filterwarnings("ignore")
 
 # Set dataset path and file name for IoT23 dataset
 dataset_path = "/home/bilz/datasets/qead/q/"
-dataset_name = "iot23.csv"
+dataset_name = "iot23pp.csv"
 results_path = "/home/bilz/results/"  # Path to save the results
 
 # Use a non-interactive backend to avoid "Wayland" issues
@@ -50,6 +51,29 @@ class IoT23Dataset(torch.utils.data.Dataset):
 
 
 # Preprocessing function for IoT23 dataset
+def preprocess_data_sample(data, qubit_no=20):
+    print(f"Preprocessing IoT23 data with qubit no {qubit_no}...")
+    del data['Unnamed: 0']
+    try:
+        data.columns = ['duration', 'orig_bytes', 'resp_bytes', 'missed_bytes', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'label', 'proto_icmp', 'proto_tcp', 'proto_udp', 'conn_state_OTH', 'conn_state_REJ', 'conn_state_RSTO', 'conn_state_RSTOS0', 'conn_state_RSTR', 'conn_state_RSTRH', 'conn_state_S0', 'conn_state_S1', 'conn_state_S2', 'conn_state_S3', 'conn_state_SF', 'conn_state_SH', 'conn_state_SHR']
+    except:
+        data.columns = ['proto', 'duration', 'orig_bytes', 'resp_bytes', 'conn_state', 'missed_bytes', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'label']
+    
+    # Instantiate the LabelEncoder
+    label_encoder = LabelEncoder()
+
+    # Now apply fit_transform on the 'proto' column
+    data['proto'] = label_encoder.fit_transform(data['proto'])
+    data['conn_state'] = label_encoder.fit_transform(data['conn_state'])
+    data['label'] = label_encoder.fit_transform(data['label'])
+    
+    X =  data[['proto', 'duration', 'orig_bytes', 'resp_bytes', 'conn_state', 'missed_bytes', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes']]
+    y_true =  data['label']
+
+    print("Preprocessing complete.")
+    return X, y_true
+
+
 def preprocess_data(data, qubit_no=20):
     print(f"Preprocessing IoT23 data with qubit no {qubit_no}...")
 
