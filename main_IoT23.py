@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 from sklearn.metrics import accuracy_score, matthews_corrcoef, f1_score, roc_auc_score, recall_score, precision_recall_curve, auc, confusion_matrix
 from sklearn.ensemble import IsolationForest, RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import OneClassSVM, SVC
@@ -23,19 +23,21 @@ from qiskit_aer import AerSimulator
 from qiskit import QuantumCircuit
 from qiskit.primitives import Estimator
 import warnings
+
+
 warnings.filterwarnings("ignore")
 
-# Set dataset path and file name for the Bearing dataset
+# Set dataset path and file name for IoT23 dataset
 dataset_path = "/home/bilz/datasets/qead/q/"
-dataset_name = "Bearing.csv"
+dataset_name = "iot23.csv"
 results_path = "/home/bilz/results/"  # Path to save the results
 
 # Use a non-interactive backend to avoid "Wayland" issues
 import matplotlib
 matplotlib.use('Agg')
 
-# Define the BearingDataset class for PyTorch
-class BearingDataset(torch.utils.data.Dataset):
+# Define the IoT23Dataset class for PyTorch
+class IoT23Dataset(torch.utils.data.Dataset):
     def __init__(self, X, y):
         self.X = torch.tensor(X, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.float32)
@@ -46,34 +48,65 @@ class BearingDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         return self.X[index], self.y[index]
 
-# Preprocessing function for Bearing dataset
+
+# Preprocessing function for IoT23 dataset
 def preprocess_data(data, qubit_no=20):
-    print(f"Preprocessing bearing data with qubit no {qubit_no}...")
+    print(f"Preprocessing IoT23 data with qubit no {qubit_no}...")
 
     if data.empty:
         raise ValueError("Dataset is empty.")
 
+    # Replace any invalid string values with NaN
+    data.replace('-', np.nan, inplace=True)
+    
+    # Handling one-hot encoding for categorical columns like 'proto', 'conn_state'
+    categorical_columns = ['proto', 'conn_state']
+    onehot_encoder = OneHotEncoder()
+    
+    # Fill missing categorical values with 'Unknown' before encoding
+    data[categorical_columns] = data[categorical_columns].fillna('Unknown')
+    
+    encoded_cats = onehot_encoder.fit_transform(data[categorical_columns]).toarray()
+
+    # Dropping original categorical columns and concatenating the one-hot encoded versions
+    data = data.drop(columns=categorical_columns)
+    data = pd.concat([data, pd.DataFrame(encoded_cats)], axis=1)
+
+    # Scaling the continuous columns (e.g., 'orig_ip_bytes', 'resp_ip_bytes')
     scaler = MinMaxScaler(feature_range=(0, np.pi))
-    
-    # Process the bearing data
-    if 'Bearing 1' in data.columns:
-        print("Processing bearing data from 'Bearing 1'...")
-        data['Bearing 1'] = scaler.fit_transform(data['Bearing 1'].values.reshape(-1, 1))
-        X = np.array([data['Bearing 1'].values[i:i + qubit_no] for i in range(len(data) - qubit_no)])
-        y_true = np.array([1 if val > 0.8 else 0 for val in data['Bearing 1'][qubit_no:]])
-    else:
-        raise ValueError("Unknown data format in dataset.")
-    
+    scaled_columns = ['orig_ip_bytes', 'resp_ip_bytes', 'duration']  # Example of continuous columns
+
+    # Convert columns to numeric and fill NaN with the mean value for scaling
+    data[scaled_columns] = data[scaled_columns].apply(pd.to_numeric, errors='coerce')
+    data[scaled_columns] = data[scaled_columns].fillna(data[scaled_columns].mean())
+
+    # Scale the numeric columns
+    data[scaled_columns] = scaler.fit_transform(data[scaled_columns])
+
+    # Ensure all remaining columns are numeric and fill remaining NaN with zeros
+    data = data.apply(pd.to_numeric, errors='coerce').fillna(0)
+
+    # Create X and y (replace with relevant logic for anomaly detection target)
+    if 'label' not in data.columns:
+        raise ValueError("Label column is missing.")
+
+    X = data.drop(columns=['label']).values  # Dropping the label column for features
+    y_true = (data['label'] == 'PartOfAHorizontalPortScan').astype(int).values  # Binary label (example)
+
     print("Preprocessing complete.")
     return X, y_true
 
+
+
+
 # Load dataset
 def load_datasets():
-    print("Loading Bearing dataset...")
+    print("Loading IoT23 dataset...")
     file_path = dataset_path + dataset_name
-    data_Bearing = pd.read_csv(file_path)
-    print(f"Loaded Bearing dataset with columns: {data_Bearing.columns}")
-    return {'Bearing': data_Bearing}
+    data_IoT23 = pd.read_csv(file_path)
+    print(f"Loaded IoT23 dataset with columns: {data_IoT23.columns}")
+    return {'IoT23': data_IoT23}
+
 
 # Quantum encoding function
 def encode_data(X):
@@ -435,14 +468,21 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
     for name, data in datasets.items():
         print(f"\nProcessing dataset: {name}")
         X, y_true = preprocess_data(data, qubit_no)
+
+        # Add a check to ensure the data is not empty
+        if X.shape[0] == 0 or y_true.shape[0] == 0:
+            print(f"Error: Dataset '{name}' is empty after preprocessing. Skipping this dataset.")
+            continue  # Skip the current dataset if it has no samples
+        
+        # Proceed if data is not empty
         X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.3, random_state=42)
 
         # Save y_test for later use in the comparison table
         y_test_dict[name] = y_test
 
         # Create dataset loaders for DNN training
-        train_dataset = BearingDataset(X_train, y_train)
-        test_dataset = BearingDataset(X_test, y_test)
+        train_dataset = IoT23Dataset(X_train, y_train)
+        test_dataset = IoT23Dataset(X_test, y_test)
         train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=16)
 
@@ -482,33 +522,33 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
             }
         }
 
-        ### Quantum Self-Attention (QSA) ###
-        print(f"Running Quantum Self-Attention for dataset {name}...")
-        start_time_qsa = time.time()
-        anomaly_scores_qsa = []
-        qsa = QuantumSelfAttention(qubit_no)
-        for sample_X in tqdm(X_test, desc="QSA"):
-            result = qsa.run(sample_X)
-            score = qsa.process_attention_output(result)
-            anomaly_scores_qsa.append(score)
-        end_time_qsa = time.time()
+        # ### Quantum Self-Attention (QSA) ###
+        # print(f"Running Quantum Self-Attention for dataset {name}...")
+        # start_time_qsa = time.time()
+        # anomaly_scores_qsa = []
+        # qsa = QuantumSelfAttention(qubit_no)
+        # for sample_X in tqdm(X_test, desc="QSA"):
+        #     result = qsa.run(sample_X)
+        #     score = qsa.process_attention_output(result)
+        #     anomaly_scores_qsa.append(score)
+        # end_time_qsa = time.time()
 
-        smart_threshold_qsa = calculate_smart_threshold(anomaly_scores_qsa)
-        y_pred_qsa = [1 if score > smart_threshold_qsa else 0 for score in anomaly_scores_qsa]
-        qsa_metrics = calculate_metrics(y_test[:len(y_pred_qsa)], y_pred_qsa)
-        nab_score_qsa = calculate_nab_score(qsa_metrics['TP Rate'], qsa_metrics['TN Rate'], nab_weights)
+        # smart_threshold_qsa = calculate_smart_threshold(anomaly_scores_qsa)
+        # y_pred_qsa = [1 if score > smart_threshold_qsa else 0 for score in anomaly_scores_qsa]
+        # qsa_metrics = calculate_metrics(y_test[:len(y_pred_qsa)], y_pred_qsa)
+        # nab_score_qsa = calculate_nab_score(qsa_metrics['TP Rate'], qsa_metrics['TN Rate'], nab_weights)
 
-        qsa_complexity = qubit_no
-        qsa_training_time = end_time_qsa - start_time_qsa
-        qsa_memory_usage = psutil.virtual_memory().used / (1024 ** 2)
+        # qsa_complexity = qubit_no
+        # qsa_training_time = end_time_qsa - start_time_qsa
+        # qsa_memory_usage = psutil.virtual_memory().used / (1024 ** 2)
 
-        results[name]['qsa_metrics'] = qsa_metrics
-        results[name]['nab_scores']['QSA'] = nab_score_qsa  # Store NAB score for QSA
-        results[name]['qsa_stats'] = {
-            'complexity': qsa_complexity,
-            'training_time': qsa_training_time,
-            'memory_usage': qsa_memory_usage
-        }
+        # results[name]['qsa_metrics'] = qsa_metrics
+        # results[name]['nab_scores']['QSA'] = nab_score_qsa  # Store NAB score for QSA
+        # results[name]['qsa_stats'] = {
+        #     'complexity': qsa_complexity,
+        #     'training_time': qsa_training_time,
+        #     'memory_usage': qsa_memory_usage
+        # }
 
         ### DNN-based Anomaly Detection ###
         dnn_models = ['self_attention', 'cnn', 'lstm', 'gru', 'cnn_lstm', 'cnn_gru', 'cnn_mha']
@@ -606,26 +646,26 @@ def print_comparison_table(results, y_test_dict):
               f"{qead_stats['training_time']:<12.5f} "
               f"{qead_stats['memory_usage']:<10.2f}")
 
-        # Quantum Self-Attention (QSA)
-        qsa_metrics = res['qsa_metrics']
-        nab_score_qsa = res['nab_scores']['QSA']
-        qsa_stats = res['qsa_stats']
+        # # Quantum Self-Attention (QSA)
+        # qsa_metrics = res['qsa_metrics']
+        # nab_score_qsa = res['nab_scores']['QSA']
+        # qsa_stats = res['qsa_stats']
 
-        pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
-        roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
+        # pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
+        # roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
 
-        print(f"{'Quantum Method (QSA)':<25} "
-              f"{qsa_metrics['MCC']:<8.3f} "
-              f"{qsa_metrics['F1']:<8.3f} "
-              f"{qsa_metrics['Accuracy']:<10.3f} "
-              f"{qsa_metrics['TP Rate']:<10.3f} "
-              f"{qsa_metrics['TN Rate']:<10.3f} "
-              f"{pr_auc_str:<8} "
-              f"{roc_auc_str:<8} "
-              f"{nab_score_qsa:<10.3f} "
-              f"{qsa_stats['complexity']:<12} "
-              f"{qsa_stats['training_time']:<12.5f} "
-              f"{qsa_stats['memory_usage']:<10.2f}")
+        # print(f"{'Quantum Method (QSA)':<25} "
+        #       f"{qsa_metrics['MCC']:<8.3f} "
+        #       f"{qsa_metrics['F1']:<8.3f} "
+        #       f"{qsa_metrics['Accuracy']:<10.3f} "
+        #       f"{qsa_metrics['TP Rate']:<10.3f} "
+        #       f"{qsa_metrics['TN Rate']:<10.3f} "
+        #       f"{pr_auc_str:<8} "
+        #       f"{roc_auc_str:<8} "
+        #       f"{nab_score_qsa:<10.3f} "
+        #       f"{qsa_stats['complexity']:<12} "
+        #       f"{qsa_stats['training_time']:<12.5f} "
+        #       f"{qsa_stats['memory_usage']:<10.2f}")
 
         # DNN Models (Self-Attention, CNN, LSTM, GRU, CNN-LSTM, etc.)
         dnn_results = res['dnn_results']

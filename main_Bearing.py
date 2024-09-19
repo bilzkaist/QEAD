@@ -482,33 +482,33 @@ def run_comparison(datasets, qubit_no=20, device='cpu'):
             }
         }
 
-        ### Quantum Self-Attention (QSA) ###
-        print(f"Running Quantum Self-Attention for dataset {name}...")
-        start_time_qsa = time.time()
-        anomaly_scores_qsa = []
-        qsa = QuantumSelfAttention(qubit_no)
-        for sample_X in tqdm(X_test, desc="QSA"):
-            result = qsa.run(sample_X)
-            score = qsa.process_attention_output(result)
-            anomaly_scores_qsa.append(score)
-        end_time_qsa = time.time()
+        # ### Quantum Self-Attention (QSA) ###
+        # print(f"Running Quantum Self-Attention for dataset {name}...")
+        # start_time_qsa = time.time()
+        # anomaly_scores_qsa = []
+        # qsa = QuantumSelfAttention(qubit_no)
+        # for sample_X in tqdm(X_test, desc="QSA"):
+        #     result = qsa.run(sample_X)
+        #     score = qsa.process_attention_output(result)
+        #     anomaly_scores_qsa.append(score)
+        # end_time_qsa = time.time()
 
-        smart_threshold_qsa = calculate_smart_threshold(anomaly_scores_qsa)
-        y_pred_qsa = [1 if score > smart_threshold_qsa else 0 for score in anomaly_scores_qsa]
-        qsa_metrics = calculate_metrics(y_test[:len(y_pred_qsa)], y_pred_qsa)
-        nab_score_qsa = calculate_nab_score(qsa_metrics['TP Rate'], qsa_metrics['TN Rate'], nab_weights)
+        # smart_threshold_qsa = calculate_smart_threshold(anomaly_scores_qsa)
+        # y_pred_qsa = [1 if score > smart_threshold_qsa else 0 for score in anomaly_scores_qsa]
+        # qsa_metrics = calculate_metrics(y_test[:len(y_pred_qsa)], y_pred_qsa)
+        # nab_score_qsa = calculate_nab_score(qsa_metrics['TP Rate'], qsa_metrics['TN Rate'], nab_weights)
 
-        qsa_complexity = qubit_no
-        qsa_training_time = end_time_qsa - start_time_qsa
-        qsa_memory_usage = psutil.virtual_memory().used / (1024 ** 2)
+        # qsa_complexity = qubit_no
+        # qsa_training_time = end_time_qsa - start_time_qsa
+        # qsa_memory_usage = psutil.virtual_memory().used / (1024 ** 2)
 
-        results[name]['qsa_metrics'] = qsa_metrics
-        results[name]['nab_scores']['QSA'] = nab_score_qsa  # Store NAB score for QSA
-        results[name]['qsa_stats'] = {
-            'complexity': qsa_complexity,
-            'training_time': qsa_training_time,
-            'memory_usage': qsa_memory_usage
-        }
+        # results[name]['qsa_metrics'] = qsa_metrics
+        # results[name]['nab_scores']['QSA'] = nab_score_qsa  # Store NAB score for QSA
+        # results[name]['qsa_stats'] = {
+        #     'complexity': qsa_complexity,
+        #     'training_time': qsa_training_time,
+        #     'memory_usage': qsa_memory_usage
+        # }
 
         ### DNN-based Anomaly Detection ###
         dnn_models = ['self_attention', 'cnn', 'lstm', 'gru', 'cnn_lstm', 'cnn_gru', 'cnn_mha']
@@ -606,26 +606,26 @@ def print_comparison_table(results, y_test_dict):
               f"{qead_stats['training_time']:<12.5f} "
               f"{qead_stats['memory_usage']:<10.2f}")
 
-        # Quantum Self-Attention (QSA)
-        qsa_metrics = res['qsa_metrics']
-        nab_score_qsa = res['nab_scores']['QSA']
-        qsa_stats = res['qsa_stats']
+        # # Quantum Self-Attention (QSA)
+        # qsa_metrics = res['qsa_metrics']
+        # nab_score_qsa = res['nab_scores']['QSA']
+        # qsa_stats = res['qsa_stats']
 
-        pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
-        roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
+        # pr_auc_str = qsa_metrics.get('PR AUC', 'N/A')
+        # roc_auc_str = qsa_metrics.get('ROC AUC', 'N/A')
 
-        print(f"{'Quantum Method (QSA)':<25} "
-              f"{qsa_metrics['MCC']:<8.3f} "
-              f"{qsa_metrics['F1']:<8.3f} "
-              f"{qsa_metrics['Accuracy']:<10.3f} "
-              f"{qsa_metrics['TP Rate']:<10.3f} "
-              f"{qsa_metrics['TN Rate']:<10.3f} "
-              f"{pr_auc_str:<8} "
-              f"{roc_auc_str:<8} "
-              f"{nab_score_qsa:<10.3f} "
-              f"{qsa_stats['complexity']:<12} "
-              f"{qsa_stats['training_time']:<12.5f} "
-              f"{qsa_stats['memory_usage']:<10.2f}")
+        # print(f"{'Quantum Method (QSA)':<25} "
+        #       f"{qsa_metrics['MCC']:<8.3f} "
+        #       f"{qsa_metrics['F1']:<8.3f} "
+        #       f"{qsa_metrics['Accuracy']:<10.3f} "
+        #       f"{qsa_metrics['TP Rate']:<10.3f} "
+        #       f"{qsa_metrics['TN Rate']:<10.3f} "
+        #       f"{pr_auc_str:<8} "
+        #       f"{roc_auc_str:<8} "
+        #       f"{nab_score_qsa:<10.3f} "
+        #       f"{qsa_stats['complexity']:<12} "
+        #       f"{qsa_stats['training_time']:<12.5f} "
+        #       f"{qsa_stats['memory_usage']:<10.2f}")
 
         # DNN Models (Self-Attention, CNN, LSTM, GRU, CNN-LSTM, etc.)
         dnn_results = res['dnn_results']
