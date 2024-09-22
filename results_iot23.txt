@@ -1,0 +1,11 @@
+Method                    MCC      F1       Accuracy   TP Rate    TN Rate    PR AUC   ROC AUC  NAB Score  Complexity   Time (s)     Size (MB) 
+
+Comparison Table for Dataset: IoT23
+Quantum Method (QEAD)     0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      17           41014.29743  11946.79  
+SELF_ATTENTION DNN        0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      3657         17.89557     12118.31  
+CNN DNN                   0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      71521        16.25075     12182.07  
+LSTM DNN                  0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      75393        12.50517     12197.89  
+GRU DNN                   0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      56577        12.48297     12194.60  
+CNN_LSTM DNN              0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      74945        18.80281     12218.97  
+CNN_GRU DNN               0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      56257        15.91840     12216.84  
+CNN_MHA DNN               0.000    1.000    1.000      1.000      0.000      N/A      N/A      0.780      3457         18.08757     12217.66  
