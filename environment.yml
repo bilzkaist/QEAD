@@ -43,6 +43,7 @@ dependencies:
   - torchaudio
   - pytorch-cuda=12.4
   - pip
+  - tabulate
 
   # Pip-installed packages
   - pip:
